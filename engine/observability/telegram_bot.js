@@ -46,52 +46,52 @@ async function buildDigest() {
 }
 
 function formatMessage({ digest, hotTools, hotSignals }) {
+  // Use plain text — no MarkdownV2 escaping headaches.
+  // Telegram renders unicode emojis natively without parse_mode.
   const lines = [];
-  lines.push('🌅 *EverythinInAI — Daily Digest*');
+  lines.push('🌅 EverythinInAI — Daily Digest');
   lines.push(`📅 ${digest.as_of || new Date().toISOString().slice(0, 10)}`);
   lines.push('');
-  lines.push('*📦 Tools:*');
-  lines.push(`  • Total active: *${digest.total_active_tools || 0}*`);
-  lines.push(`  • Added (24h): *${digest.tools_added_24h || 0}*`);
+  lines.push('📦 TOOLS');
+  lines.push(`  Total active: ${digest.total_active_tools || 0}`);
+  lines.push(`  Added (24h): ${digest.tools_added_24h || 0}`);
   lines.push('');
-  lines.push('*📰 Signals:*');
-  lines.push(`  • Total active: *${digest.total_active_signals || 0}*`);
-  lines.push(`  • Added (24h): *${digest.signals_added_24h || 0}*`);
-  lines.push(`  • Hot (virality≥7): *${digest.hot_signals_24h || 0}*`);
+  lines.push('📰 SIGNALS');
+  lines.push(`  Total active: ${digest.total_active_signals || 0}`);
+  lines.push(`  Added (24h): ${digest.signals_added_24h || 0}`);
+  lines.push(`  Hot (virality≥7): ${digest.hot_signals_24h || 0}`);
   lines.push('');
-  lines.push('*🎬 Avatar:*');
-  lines.push(`  • Briefs awaiting review: *${digest.briefs_awaiting_review || 0}*`);
-  lines.push(`  • Posted today: *${digest.posts_today || 0}*`);
+  lines.push('🎬 AVATAR');
+  lines.push(`  Briefs awaiting review: ${digest.briefs_awaiting_review || 0}`);
+  lines.push(`  Posted today: ${digest.posts_today || 0}`);
   lines.push('');
-  lines.push('*⚙️ Engine:*');
-  lines.push(`  • Backfill: ${digest.backfill_months_done || 0} done / ${digest.backfill_months_pending || 0} pending`);
-  lines.push(`  • Failed runs (24h): *${digest.failed_runs_24h || 0}*`);
+  lines.push('⚙️ ENGINE');
+  lines.push(`  Backfill: ${digest.backfill_months_done || 0} done / ${digest.backfill_months_pending || 0} pending`);
+  lines.push(`  Failed runs (24h): ${digest.failed_runs_24h || 0}`);
   if (digest.last_successful_run_at) {
-    lines.push(`  • Last successful run: ${new Date(digest.last_successful_run_at).toLocaleString()}`);
+    lines.push(`  Last successful run: ${new Date(digest.last_successful_run_at).toLocaleString()}`);
   }
 
   if (hotTools.length) {
     lines.push('');
-    lines.push('*🔥 Top tools today:*');
+    lines.push('🔥 TOP TOOLS TODAY');
     hotTools.forEach((t, i) => {
-      lines.push(`${i + 1}. *${escapeMd(t.name)}* — ${escapeMd((t.tagline || '').substring(0, 80))}`);
+      const name = String(t.name || '').substring(0, 80);
+      const tagline = String(t.tagline || '').substring(0, 80);
+      lines.push(`${i + 1}. ${name} — ${tagline}`);
     });
   }
 
   if (hotSignals.length) {
     lines.push('');
-    lines.push('*🚨 Top signals today:*');
+    lines.push('🚨 TOP SIGNALS TODAY');
     hotSignals.forEach((s, i) => {
-      lines.push(`${i + 1}. \\[${s.type}/${s.virality_score}/10\\] *${escapeMd(s.title.substring(0, 100))}*`);
+      const title = String(s.title || '').substring(0, 100);
+      lines.push(`${i + 1}. [${s.type}/${s.virality_score}/10] ${title}`);
     });
   }
 
   return lines.join('\n');
-}
-
-// Telegram MarkdownV2 requires escaping certain chars
-function escapeMd(s) {
-  return String(s || '').replace(/[_*[\]()~`>#+\-=|{}.!]/g, (c) => `\\${c}`);
 }
 
 async function send(text) {
@@ -105,7 +105,7 @@ async function send(text) {
   await axios.post(url, {
     chat_id: TELEGRAM_CHAT_ID,
     text,
-    parse_mode: 'MarkdownV2',
+    // Plain text — no parse_mode — maximum compatibility, zero escaping headaches
     disable_web_page_preview: true,
   });
   log.info('Daily digest sent to Telegram');
