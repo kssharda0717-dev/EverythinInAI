@@ -120,7 +120,9 @@ async function downloadDirectAudio(url, outPath) {
 
 function extractClip(srcPath, startSec, durationSec, outPath) {
   log.info(`Extracting ${durationSec}s clip starting at ${startSec}s → ${outPath}`);
-  // Trim, downmix to mono, normalize to -3 dB, export as 22050 Hz MP3 (Chatterbox-friendly)
+  // Trim, downmix to mono, export as 22050 Hz MP3 (Chatterbox-friendly).
+  // Skip loudnorm — iPhone recording is already at decent loudness AND loudnorm's
+  // 2-pass analysis can stall on a 1GB RAM VM. Use simple peak-norm via volume filter.
   const r = spawnSync('ffmpeg', [
     '-y',
     '-ss', String(startSec),
@@ -128,11 +130,11 @@ function extractClip(srcPath, startSec, durationSec, outPath) {
     '-t', String(durationSec),
     '-ac', '1',
     '-ar', '22050',
-    '-af', 'loudnorm=I=-16:TP=-1.5:LRA=11',
+    '-af', 'dynaudnorm=p=0.71:g=15',   // single-pass normalization, fast
     '-b:a', '128k',
     outPath,
-  ], { stdio: 'inherit' });
-  if (r.status !== 0) throw new Error('ffmpeg extraction failed');
+  ], { stdio: 'inherit', timeout: 60_000 });
+  if (r.status !== 0) throw new Error(`ffmpeg extraction failed (status=${r.status})`);
 }
 
 async function uploadAudio(localPath, persona, label) {
