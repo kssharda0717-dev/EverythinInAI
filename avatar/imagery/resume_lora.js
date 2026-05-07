@@ -54,19 +54,24 @@ async function main() {
       .maybeSingle();
     loraRow = data;
   } else {
+    // Find the most recent row for this persona that hasn't been activated yet,
+    // regardless of training_status (covers cases where status was stale).
     const { data } = await db.from('persona_loras')
       .select('*')
       .eq('persona_id', persona.id)
-      .in('training_status', ['pending', 'training'])
+      .eq('is_active', false)
+      .not('training_id', 'is', null)
       .order('created_at', { ascending: false })
       .limit(1);
     if (!data || data.length === 0) {
-      log.error('No in-flight LoRA training found. Run train_lora.js to start a new one.');
+      log.error('No un-activated LoRA training found. Run train_lora.js to start a new one.');
       process.exit(1);
     }
     loraRow = data[0];
     trainingId = loraRow.training_id;
   }
+
+  log.info(`Found lora row ${loraRow.id} with training ${trainingId} (current status=${loraRow.training_status})`);
 
   if (!trainingId) {
     log.error(`Lora row ${loraRow?.id} has no training_id. Cannot resume.`);
