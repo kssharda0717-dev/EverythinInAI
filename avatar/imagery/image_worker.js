@@ -32,10 +32,11 @@ const { rehostImage } = require('./storage');
 const log = createLogger('image_worker');
 
 function parseArgs(argv) {
-  const args = { conceptId: null, useWinner: false, date: null, dryRun: false };
+  const args = { conceptId: null, useWinner: false, date: null, dryRun: false, single: false };
   for (const a of argv.slice(2)) {
     if (a === '--winner') args.useWinner = true;
     else if (a === '--dry-run') args.dryRun = true;
+    else if (a === '--single') args.single = true;
     else if (a.startsWith('--date=')) args.date = a.split('=')[1];
     else if (!a.startsWith('--')) args.conceptId = a;
   }
@@ -87,27 +88,39 @@ async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }
   const negativePrompt = await personaService.buildNegativePrompt();
 
   if (dryRun) {
-    log.info(`DRY: keyframe[${idx}] prompt = ${fullPrompt.substring(0, 200)}...`);
+    log.info(`── DRY KEYFRAME[${idx}] ──`);
+    log.info(`PROMPT:\n${fullPrompt}`);
+    log.info(`NEGATIVE:\n${negativePrompt}`);
     return { skipped: true };
   }
 
   const seed = Math.floor(Math.random() * 1_000_000);
 
-  const result = await runModel('flux_pulid', {
-    main_face_image: anchorUrl,
+  // Using InstantID-SDXL (photoreal-first, industry standard for AI personas).
+  // Key params:
+  //   ip_adapter_scale = identity strength. 0.8 default keeps face but lets pose/scene vary.
+  //                      We use 0.8 (sweet spot — too high = stiff, too low = drifts off).
+  //   controlnet_conditioning_scale = how strongly the pose/canny/depth controlnets steer.
+  //                                    0.8 default is balanced.
+  //   guidance_scale = prompt adherence. 5 = relaxed/natural; we use 5.
+  //   num_inference_steps = quality. 30 = balanced (vs 50 = slower).
+  const result = await runModel('instant_id', {
+    image: anchorUrl,                     // Avi's locked face anchor
     prompt: fullPrompt,
     negative_prompt: negativePrompt,
     width: 832,
-    height: 1216,         // 4:5 portrait — IG Reel safe
-    num_steps: 20,         // PuLID-Flux caps at 20
-    start_step: 0,
-    guidance_scale: 3.5,   // down from 4: lower guidance = more natural, less prompt-lean
-    id_weight: 1.05,       // up from 1.0: stronger face-lock to anchor
-    true_cfg: 1.5,         // up from 1.0: encourages truer-to-photo output
+    height: 1216,                          // 4:5 portrait
     num_outputs: 1,
+    num_inference_steps: 30,
+    guidance_scale: 5,
+    ip_adapter_scale: 0.8,                 // identity strength
+    controlnet_conditioning_scale: 0.8,    // overall control strength
+    enable_pose_controlnet: true,
+    enhance_nonface_region: true,          // critical for body/clothing realism
     output_format: 'webp',
     output_quality: 92,
-    max_sequence_length: 128,
+    sdxl_weights: 'stable-diffusion-xl-base-1.0',
+    scheduler: 'EulerDiscreteScheduler',
     seed,
   }, { timeoutMs: 300_000 });
 
@@ -118,7 +131,7 @@ async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }
   return {
     image_url: hosted.publicUrl,
     storage_path: hosted.storagePath,
-    model: 'flux-pulid',
+    model: 'instant-id-sdxl',
     is_face_locked: true,
     seed,
     cost_usd: result.cost_usd,
@@ -168,16 +181,18 @@ async function main() {
     }
   }
 
-  log.info(`Rendering ${keyframes.length} keyframes...`);
+  // --single mode: only render keyframe 0 to validate cheaply (~$0.02)
+  const renderList = args.single ? keyframes.slice(0, 1) : keyframes;
+  log.info(`Rendering ${renderList.length} keyframe${renderList.length > 1 ? 's' : ''}${args.single ? ' (SINGLE TEST mode)' : ''}...`);
 
   const results = [];
   let totalCost = 0;
   let totalMs = 0;
 
-  for (let i = 0; i < keyframes.length; i++) {
-    const kf = keyframes[i];
+  for (let i = 0; i < renderList.length; i++) {
+    const kf = renderList[i];
     log.info(`──────────────────────────────────────────`);
-    log.info(`Keyframe ${i + 1}/${keyframes.length}`);
+    log.info(`Keyframe ${i + 1}/${renderList.length}`);
     try {
       const r = await renderKeyframe({
         persona, anchorUrl, kf, idx: i, conceptId: concept.id, dryRun: args.dryRun,
