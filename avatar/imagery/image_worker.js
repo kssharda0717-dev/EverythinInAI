@@ -65,12 +65,19 @@ function buildKeyframePrompt(persona, sceneDescription, sceneCaption) {
   // The persona descriptor is REPEATED in every prompt so PuLID has full context.
   // We deliberately don't put face details in the prompt — PuLID handles that
   // from the conditioning image. We only describe wardrobe + setting + scene.
+  //
+  // CRITICAL: This template MUST keep PuLID-Flux from drifting into stylized /
+  // cartoon territory (the base Flux + PuLID combo has a known bias toward
+  // illustration). We anchor it to "photograph" 5+ times and reject all
+  // illustration tokens up front.
   return [
-    `A 25-year-old Indian woman content creator (Avi). Wheatish skin, long dark brown hair, athletic-feminine build.`,
+    `Real DSLR photograph (NOT illustration, NOT painting, NOT cartoon, NOT cgi, NOT digital art) of a 25-year-old Indian woman content creator (Avi).`,
+    `Warm wheatish skin tone with natural visible pores and fine peach fuzz, soft makeup, no filter look.`,
+    `Long dark brown hair softly waved, athletic-feminine build with normal proportions.`,
     sceneDescription,
-    `Wearing aesthetically curated outfit (ribbed knit top OR fitted blazer over silk camisole OR oversized cardigan), palette of beige / forest green / ivory / matte gold.`,
-    `Indoor minimalist Bandra studio apartment OR cozy book-lined corner, soft warm light, plants, hardcover books, matte black laptop visible.`,
-    `Editorial photograph, shot on Sony A7R IV, 35mm or 85mm lens, shallow depth of field, photorealistic, ultra-detailed skin texture with natural fine pores, subtle film grain, magazine-quality.`,
+    `Wearing a fitted ribbed cream knit top with high crew neck OR oversized beige cardigan over a high-neck top OR fitted blazer buttoned over a high-neck top. Modest, sophisticated, NEVER plunging, NEVER low-cut, NEVER showing cleavage. Palette of cream, beige, forest green, ivory, with delicate matte gold jewelry.`,
+    `Indoor minimalist Bandra studio apartment OR cozy book-lined corner, soft warm window light or studio editorial lighting, plants and hardcover books in soft bokeh, matte black laptop visible.`,
+    `Photograph shot on Sony A7R IV with 35mm or 85mm prime lens at f/1.8, shallow depth of field, natural skin texture, subtle 35mm film grain, magazine editorial photography, Vogue India aesthetic, candid documentary feel, photorealistic.`,
   ].join(' ');
 }
 
@@ -92,11 +99,11 @@ async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }
     negative_prompt: negativePrompt,
     width: 832,
     height: 1216,         // 4:5 portrait — IG Reel safe
-    num_steps: 20,
+    num_steps: 25,         // up from 20: more steps = better photorealism, less style drift
     start_step: 0,
-    guidance_scale: 4,
-    id_weight: 1.0,        // 1.0 = strong face-lock to anchor
-    true_cfg: 1,
+    guidance_scale: 3.5,   // down from 4: lower guidance = more natural, less prompt-lean
+    id_weight: 1.05,       // up from 1.0: stronger face-lock to anchor
+    true_cfg: 1.5,         // up from 1.0: encourages truer-to-photo output
     num_outputs: 1,
     output_format: 'webp',
     output_quality: 92,

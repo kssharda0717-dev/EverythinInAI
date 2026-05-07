@@ -67,7 +67,23 @@ async function buildVisualPromptHeader() {
 async function buildNegativePrompt() {
   const persona = await getActivePersona();
   const forbidden = (persona.forbidden_visuals || []).join(', ');
-  return `${forbidden}, child, minor, deformed, extra limbs, extra fingers, blurry face, watermark, text, logo, artificial-looking skin, plastic skin, cartoon, anime, illustration, painting, low quality, jpeg artifacts, oversaturated, harsh shadows, phone flash, mirror selfie cliche`;
+  // Heavy anti-stylization + anti-lure tokens. Order matters — most-critical first.
+  return [
+    // Anti-cartoon (CRITICAL — PuLID-Flux drifts here without explicit suppression)
+    'cartoon, anime, illustration, painting, drawing, sketch, digital art, 3d render, cgi, pixar, disney, stylized, manga, comic, vector art, cel shading, smooth skin render',
+    // Anti-lure / wardrobe drift (Avi at lure 2 must be modest)
+    'cleavage, plunging neckline, low-cut top, deep v-neck, bare chest, exposed chest, lingerie, bikini, bra, swimwear, off-shoulder, strapless, bare back, nudity, sexual',
+    // Anatomy fixes
+    'deformed, distorted, mutated, extra limbs, extra fingers, missing fingers, fused fingers, long neck, bobblehead, tiny head, oversized head, wrong proportions, asymmetric eyes, lazy eye, crossed eyes',
+    // Face quality
+    'blurry face, plastic skin, doll-like, porcelain skin, airbrushed, overprocessed, beauty filter, instagram filter, makeup mask, fake eyelashes, heavy makeup',
+    // Image quality
+    'watermark, text, logo, signature, jpeg artifacts, low quality, low resolution, oversaturated, undersaturated, harsh shadows, phone flash, ring light reflection, mirror selfie, bathroom selfie',
+    // Identity drift
+    'multiple people, two faces, twin, clone',
+    // Persona-specific forbidden visuals (from DB)
+    forbidden,
+  ].filter(Boolean).join(', ');
 }
 
 /**
