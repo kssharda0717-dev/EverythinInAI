@@ -1,0 +1,18 @@
+[Unit]
+Description=EverythinInAI — Daily Ideation (drafts Reel concepts for Avi)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/ideation/run_daily.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/ideation.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/ideation.log
+TimeoutStartSec=600
+Nice=10
+
+[Install]
+WantedBy=multi-user.target

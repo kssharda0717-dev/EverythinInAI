@@ -1,0 +1,11 @@
+[Unit]
+Description=Run EverythinInAI ideation once daily at 08:00 IST
+
+[Timer]
+# 08:00 IST = 02:30 UTC
+OnCalendar=*-*-* 02:30:00 UTC
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

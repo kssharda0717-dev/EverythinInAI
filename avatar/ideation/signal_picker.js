@@ -1,0 +1,186 @@
+/**
+ * EverythinInAI — Daily Signal Picker
+ *
+ * Scans the last 48h of signals, applies fresh time-decay scoring, dedupes by
+ * entity (so we don't pick 3 OpenAI signals in one day), and returns the
+ * top winner + 2 backups for ideation.
+ *
+ * Scoring (0-100):
+ *   base               = signal.virality_score * 10        (0-100)
+ *   freshness_boost    = +20 if published in last 6h
+ *   freshness_boost    = +10 if published in last 24h
+ *   freshness_boost    =  -5 if older than 36h
+ *   engagement_boost   = +min(20, log2(upvotes+1))         (Reddit/HN)
+ *   type_boost:
+ *     release/drama    = +10  (very Reel-able)
+ *     funding          = +5
+ *     research         = +0   (already weighted by classifier)
+ *     news             = +5
+ *     opinion          = -5   (less Reel-able)
+ *     meme             = +15  (instant viral)
+ *   recency_penalty    = -25 if same entity has been used in last 7 days
+ *   already-used penalty = -100 if signal_id already has a winner concept
+ */
+
+const dbModule = require('../../engine/core/database');
+const { createLogger } = require('../../engine/utils/logger');
+
+const log = createLogger('signal_picker');
+
+const TYPE_BOOSTS = {
+  release: 10,
+  drama:   10,
+  meme:    15,
+  funding: 5,
+  news:    5,
+  research: 0,
+  tutorial: 0,
+  opinion: -5,
+  tool:    -2,  // tools handled separately, but keep selectable
+};
+
+function freshnessBoost(publishedAt) {
+  if (!publishedAt) return -10;
+  const ageHours = (Date.now() - Date.parse(publishedAt)) / 3_600_000;
+  if (ageHours <= 6) return 20;
+  if (ageHours <= 24) return 10;
+  if (ageHours <= 36) return 0;
+  return -5;
+}
+
+function engagementBoost(upvotes, comments) {
+  const total = (upvotes || 0) + (comments || 0) * 2;
+  if (total <= 0) return 0;
+  return Math.min(20, Math.log2(total + 1));
+}
+
+function scoreSignal(sig, recentEntityCounts = {}) {
+  const base = (sig.virality_score || 0) * 10;
+  const fresh = freshnessBoost(sig.published_at || sig.added_at);
+  const eng = engagementBoost(sig.upvotes, sig.comments);
+  const typeB = TYPE_BOOSTS[sig.type] || 0;
+
+  // Recency penalty: was the same entity used in last 7 days?
+  let recencyPenalty = 0;
+  for (const ent of (sig.entities || [])) {
+    if (recentEntityCounts[ent.toLowerCase()]) {
+      recencyPenalty -= 25;
+      break;
+    }
+  }
+
+  return Math.round(base + fresh + eng + typeB + recencyPenalty);
+}
+
+async function getRecentEntityCounts(personaId, days = 7) {
+  const db = dbModule.getClient();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  const { data, error } = await db
+    .from('reel_concepts')
+    .select('signal_id, target_date')
+    .eq('persona_id', personaId)
+    .eq('is_winner', true)
+    .gte('target_date', since.slice(0, 10));
+
+  if (error) {
+    log.warn(`Could not fetch recent winners: ${error.message}`);
+    return {};
+  }
+
+  if (!data || data.length === 0) return {};
+
+  const sigIds = data.map(r => r.signal_id).filter(Boolean);
+  if (sigIds.length === 0) return {};
+
+  const { data: sigs } = await db
+    .from('ai_signals')
+    .select('entities')
+    .in('id', sigIds);
+
+  const counts = {};
+  for (const s of (sigs || [])) {
+    for (const e of (s.entities || [])) {
+      const k = e.toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+    }
+  }
+  return counts;
+}
+
+async function getUsedSignalIds(personaId, days = 30) {
+  const db = dbModule.getClient();
+  const since = new Date(Date.now() - days * 86400_000).toISOString().slice(0, 10);
+  const { data } = await db
+    .from('reel_concepts')
+    .select('signal_id')
+    .eq('persona_id', personaId)
+    .gte('target_date', since)
+    .not('signal_id', 'is', null);
+  return new Set((data || []).map(r => r.signal_id));
+}
+
+/**
+ * Pick the top N candidate signals for today's ideation.
+ * @returns {Promise<Array>} array of {signal, score, reasoning}
+ */
+async function pickTopSignals(personaId, options = {}) {
+  const limit = options.limit ?? 3;
+  const lookbackHours = options.lookbackHours ?? 48;
+
+  const db = dbModule.getClient();
+
+  log.info(`Scanning last ${lookbackHours}h of signals for persona ${personaId}...`);
+
+  const since = new Date(Date.now() - lookbackHours * 3_600_000).toISOString();
+
+  const { data: signals, error } = await db
+    .from('ai_signals')
+    .select('id, slug, title, summary, narrative, url, type, subtype, entities, topics, virality_score, avatar_angles, source, upvotes, comments, published_at, added_at')
+    .eq('is_active', true)
+    .gte('added_at', since)
+    .gte('virality_score', 4)        // skip junk early
+    .order('virality_score', { ascending: false })
+    .limit(80);
+
+  if (error) throw new Error(`Failed to fetch signals: ${error.message}`);
+
+  if (!signals || signals.length === 0) {
+    log.warn('No fresh signals found in lookback window. Falling back to last 7 days.');
+    const { data: fallback } = await db
+      .from('ai_signals')
+      .select('id, slug, title, summary, narrative, url, type, subtype, entities, topics, virality_score, avatar_angles, source, upvotes, comments, published_at, added_at')
+      .eq('is_active', true)
+      .gte('added_at', new Date(Date.now() - 7 * 86400_000).toISOString())
+      .gte('virality_score', 5)
+      .order('virality_score', { ascending: false })
+      .limit(40);
+    if (!fallback || fallback.length === 0) {
+      throw new Error('No usable signals in the last 7 days. Check the discovery engine.');
+    }
+    signals.push(...fallback);
+  }
+
+  log.info(`Found ${signals.length} candidate signals. Scoring...`);
+
+  const recentEntityCounts = await getRecentEntityCounts(personaId);
+  const usedIds = await getUsedSignalIds(personaId);
+
+  const scored = signals
+    .filter(s => !usedIds.has(s.id))
+    .map(s => ({
+      signal: s,
+      score: scoreSignal(s, recentEntityCounts),
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const top = scored.slice(0, limit);
+
+  log.info(`Top ${top.length} candidates:`);
+  top.forEach((c, i) => {
+    log.info(`  #${i + 1} [score=${c.score}] [${c.signal.type}] ${c.signal.title.substring(0, 80)}`);
+  });
+
+  return top;
+}
+
+module.exports = { pickTopSignals, scoreSignal };
