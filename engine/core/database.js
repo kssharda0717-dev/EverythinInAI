@@ -11,6 +11,12 @@ const log = createLogger('database');
 
 let supabase = null;
 
+// UUID v4 validator — guards against malformed IDs from Gemini
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isValidUuid(s) {
+  return typeof s === 'string' && UUID_REGEX.test(s);
+}
+
 function getClient() {
   if (!supabase) {
     supabase = createClient(config.supabase.url, config.supabase.serviceKey, {
@@ -148,6 +154,10 @@ async function dequeueItemsForClassification(batchSize, runId) {
 }
 
 async function markItemClassified(itemId, geminiResponse) {
+  if (!isValidUuid(itemId)) {
+    log.error(`Skipping markItemClassified — malformed UUID: ${itemId}`);
+    return;
+  }
   const db = getClient();
   const { error } = await db.from('discovery_queue').update({
     status: 'classified',
@@ -158,6 +168,10 @@ async function markItemClassified(itemId, geminiResponse) {
 }
 
 async function markItemRejected(itemId, reason) {
+  if (!isValidUuid(itemId)) {
+    log.error(`Skipping markItemRejected — malformed UUID: ${itemId}`);
+    return;
+  }
   const db = getClient();
   const { error } = await db.from('discovery_queue').update({
     status: 'rejected',
@@ -168,6 +182,10 @@ async function markItemRejected(itemId, reason) {
 }
 
 async function markItemError(itemId, errorMsg) {
+  if (!isValidUuid(itemId)) {
+    log.error(`Skipping markItemError — malformed UUID: ${itemId}`);
+    return;
+  }
   const db = getClient();
   const { error } = await db.from('discovery_queue').update({
     status: 'error',
@@ -426,8 +444,77 @@ async function isUrlAlreadyKnown(urlNormalized) {
   return false;
 }
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// AI SIGNALS (v2 — non-tool content: news, research, drama, etc.)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function insertSignal(signal) {
+  const db = getClient();
+
+  // Slug from name + small entropy for uniqueness
+  const baseSlug = generateSlug(signal.name || signal.title || 'signal');
+  const slug = `${baseSlug}-${Date.now().toString(36).slice(-4)}`;
+
+  const record = {
+    slug,
+    title: signal.name || signal.title || 'Untitled',
+    summary: signal.summary || '',
+    narrative: signal.narrative || '',
+    url: signal.url,
+    type: signal.type,
+    subtype: signal.subtype || '',
+    entities: Array.isArray(signal.entities) ? signal.entities : [],
+    topics: Array.isArray(signal.topics) ? signal.topics : [],
+    virality_score: typeof signal.virality_score === 'number' ? signal.virality_score : 0,
+    avatar_angles: Array.isArray(signal.avatar_angles) ? signal.avatar_angles : [],
+    is_evergreen: signal.is_evergreen === true,
+    newsworthy_until: signal.newsworthy_until || null,
+    source: signal.source || 'auto_discovery',
+    source_url: signal.source_url || '',
+    author: signal.author || '',
+    upvotes: signal.upvotes || 0,
+    comments: signal.comments || 0,
+    classifier_version: 'v2.0',
+    confidence: signal.confidence || 0,
+    published_at: signal.published_at || new Date().toISOString(),
+    run_id: signal.run_id || '',
+  };
+
+  const { data, error } = await db.from('ai_signals').insert(record).select().single();
+
+  if (error) {
+    if (error.code === '23505') {
+      log.debug(`Duplicate signal skipped: ${signal.name}`);
+      return null;
+    }
+    throw new Error(`Failed to insert signal ${signal.name}: ${error.message}`);
+  }
+
+  log.info(`Signal inserted [${signal.type}]: ${signal.name} (virality ${signal.virality_score})`);
+  return data;
+}
+
+async function checkSignalDuplicate(urlNormalized) {
+  const db = getClient();
+  const { data } = await db.from('ai_signals')
+    .select('id, title')
+    .eq('url_normalized', urlNormalized)
+    .limit(1)
+    .maybeSingle();
+  return data ? { isDuplicate: true, matchedTitle: data.title, matchedId: data.id } : { isDuplicate: false };
+}
+
+async function getSignalCount() {
+  const db = getClient();
+  const { count } = await db.from('ai_signals')
+    .select('*', { count: 'exact', head: true })
+    .eq('is_active', true);
+  return count || 0;
+}
+
 module.exports = {
   getClient,
+  isValidUuid,
   createRun,
   updateRunState,
   getLatestRun,
@@ -448,4 +535,8 @@ module.exports = {
   updateBackfillMonth,
   isUrlAlreadyKnown,
   generateSlug,
+  // v2 additions
+  insertSignal,
+  checkSignalDuplicate,
+  getSignalCount,
 };

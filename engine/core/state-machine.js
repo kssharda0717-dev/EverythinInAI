@@ -267,11 +267,19 @@ class DiscoveryStateMachine {
         rateLimiter.recordSuccess(results.estimatedTokens || 2000);
 
         for (const result of results.items) {
-          if (result.is_ai_tool && result.confidence >= 0.7) {
+          // v2: accept anything with a valid type AND confidence ≥ 0.6
+          // (lower threshold for signals because news classification is harder than tool classification)
+          const isAcceptedTool = result.type === 'tool' && result.confidence >= 0.7;
+          const isAcceptedSignal = result.type && result.type !== 'tool' && result.confidence >= 0.6;
+
+          if (isAcceptedTool || isAcceptedSignal) {
             await db.markItemClassified(result.queueId, result);
             totalClassified++;
           } else {
-            await db.markItemRejected(result.queueId, `Not an AI tool (confidence: ${result.confidence})`);
+            await db.markItemRejected(
+              result.queueId,
+              `Not classifiable (type: ${result.type || 'null'}, confidence: ${result.confidence})`
+            );
             totalRejected++;
           }
         }
@@ -307,6 +315,7 @@ class DiscoveryStateMachine {
 
     const classifiedItems = await db.getClassifiedItems(this.runId);
     let merged = 0;
+    let mergedSignals = 0;
     let skipped = 0;
 
     for (const item of classifiedItems) {
@@ -314,6 +323,37 @@ class DiscoveryStateMachine {
       if (!geminiData || !geminiData.name || !geminiData.url) {
         await db.markItemRejected(item.id, 'Missing name or URL from Gemini');
         skipped++;
+        continue;
+      }
+
+      // v2 BRANCH: route signals (news/research/drama/etc.) to ai_signals table
+      if (geminiData.type && geminiData.type !== 'tool') {
+        try {
+          const urlNorm = this._normalizeUrl(geminiData.url);
+          const dup = await db.checkSignalDuplicate(urlNorm);
+          if (dup.isDuplicate) {
+            await db.markItemRejected(item.id, `Duplicate signal: "${dup.matchedTitle}"`);
+            skipped++;
+            continue;
+          }
+          await db.insertSignal({
+            ...geminiData,
+            source: item.source,
+            source_url: item.source_url,
+            author: item.author,
+            upvotes: item.upvotes,
+            comments: item.comments,
+            published_at: item.published_at,
+            run_id: this.runId,
+          });
+          const dbClient = db.getClient();
+          await dbClient.from('discovery_queue').update({ status: 'merged' }).eq('id', item.id);
+          mergedSignals++;
+        } catch (err) {
+          log.error(`Failed to merge signal ${geminiData.name}: ${err.message}`);
+          await db.markItemError(item.id, `Signal merge error: ${err.message}`);
+          skipped++;
+        }
         continue;
       }
 
@@ -366,8 +406,8 @@ class DiscoveryStateMachine {
       }
     }
 
-    this.stats.merged = merged;
-    log.info(`Merge complete: ${merged} new tools added, ${skipped} skipped`);
+    this.stats.merged = merged + mergedSignals;
+    log.info(`Merge complete: ${merged} tools, ${mergedSignals} signals added, ${skipped} skipped`);
   }
 
   async _executeCommit() {
