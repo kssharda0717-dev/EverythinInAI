@@ -41,12 +41,12 @@ const log = createLogger('voice_setup');
 // ─────────────────────────────────────────────────────────────────────────────
 const DEFAULT_REFERENCES = [
   {
-    label: 'mostly_sane_calm_vlog',
-    url: 'https://www.youtube.com/watch?v=JHDDzZ8sMl4',  // "I am 30. Here is what I have learned." — calm reflective monologue
-    source_url: 'https://www.youtube.com/watch?v=JHDDzZ8sMl4',
-    start_sec: 12,
+    label: 'barkha_singh_tedx',
+    url: 'https://www.youtube.com/watch?v=AGRGLh1FyyQ',  // TEDxNSIT "Be the change you want to see" — 8min solo monologue, clean audio
+    source_url: 'https://www.youtube.com/watch?v=AGRGLh1FyyQ',
+    start_sec: 60,                          // skip the intro applause/music
     duration_sec: 10,
-    notes: 'Mostly Sane calm reflective monologue — closest tonal match to Avi.',
+    notes: 'Barkha Singh TEDx solo monologue — calm articulate Indian English, no background music.',
   },
 ];
 
@@ -89,7 +89,22 @@ async function downloadYouTubeClip(youtubeUrl, outPath) {
   }
   log.info(`Downloading audio from ${youtubeUrl}...`);
   const tmpAudio = outPath.replace(/\.\w+$/, '.full.m4a');
-  execSync(`yt-dlp -f 'bestaudio[ext=m4a]/bestaudio' -o "${tmpAudio}" "${youtubeUrl}"`, { stdio: 'inherit' });
+  // 2026 YouTube extraction needs a JS runtime. Node is already on the VM—
+  // tell yt-dlp where it is and use the web client + cookies-from-browser fallback.
+  // The --extractor-args use_pot=true triggers signature-cipher resolution via the JS interpreter.
+  const cmd = [
+    'yt-dlp',
+    '--js-runtimes', `node:$(command -v node)`,
+    '--extractor-args', 'youtube:player_client=web,android,ios;use_pot=true',
+    '--user-agent', '"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"',
+    '-f', '"bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"',
+    '--no-playlist',
+    '--no-warnings',
+    '-o', `"${tmpAudio}"`,
+    `"${youtubeUrl}"`,
+  ].join(' ');
+  log.info(`Running: ${cmd}`);
+  execSync(cmd, { stdio: 'inherit', shell: '/bin/bash' });
   return tmpAudio;
 }
 
