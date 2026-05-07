@@ -92,6 +92,17 @@ async function runBackfill() {
   if (progress.pending === 0 && progress.failed === 0 && progress.inProgress === 0) {
     log.info('Backfill is complete! Running final commit...');
     await manager.finalCommit();
+
+    // Auto-disable the backfill systemd timer so we stop firing pointless invocations.
+    // Safe no-op if systemd is not available (e.g. running on a Mac).
+    try {
+      const { execSync } = require('child_process');
+      execSync('sudo systemctl disable --now everythinginai-backfill.timer 2>/dev/null', { stdio: 'ignore' });
+      log.info('Auto-disabled backfill systemd timer (backfill complete).');
+    } catch (e) {
+      log.debug('Could not auto-disable backfill timer (no systemd or no sudo). Manual disable recommended.');
+    }
+
     return { status: 'complete', progress };
   }
 

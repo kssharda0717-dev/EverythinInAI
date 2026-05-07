@@ -448,12 +448,24 @@ async function isUrlAlreadyKnown(urlNormalized) {
 // AI SIGNALS (v2 — non-tool content: news, research, drama, etc.)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+const { applyTimeDecay } = require('../intelligence/time_decay');
+
 async function insertSignal(signal) {
   const db = getClient();
 
   // Slug from name + small entropy for uniqueness
   const baseSlug = generateSlug(signal.name || signal.title || 'signal');
   const slug = `${baseSlug}-${Date.now().toString(36).slice(-4)}`;
+
+  // Apply virality time-decay BEFORE writing to DB.
+  // Time-sensitive types (news/release/drama/funding) lose virality fast.
+  // Evergreen types (tool/research/tutorial/opinion/meme) keep their score.
+  const originalScore = typeof signal.virality_score === 'number' ? signal.virality_score : 0;
+  const decay = applyTimeDecay(signal.type, originalScore, signal.published_at);
+
+  if (decay.decayedVirality === 0 && originalScore > 0) {
+    log.debug(`Signal "${signal.name}" decayed to 0 (type:${signal.type}, age:${decay.ageBucket})`);
+  }
 
   const record = {
     slug,
@@ -465,9 +477,9 @@ async function insertSignal(signal) {
     subtype: signal.subtype || '',
     entities: Array.isArray(signal.entities) ? signal.entities : [],
     topics: Array.isArray(signal.topics) ? signal.topics : [],
-    virality_score: typeof signal.virality_score === 'number' ? signal.virality_score : 0,
+    virality_score: decay.decayedVirality,
     avatar_angles: Array.isArray(signal.avatar_angles) ? signal.avatar_angles : [],
-    is_evergreen: signal.is_evergreen === true,
+    is_evergreen: decay.isEvergreen,
     newsworthy_until: signal.newsworthy_until || null,
     source: signal.source || 'auto_discovery',
     source_url: signal.source_url || '',
