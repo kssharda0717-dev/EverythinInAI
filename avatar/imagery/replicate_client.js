@@ -54,13 +54,30 @@ async function runModel(modelKey, input, opts = {}) {
   // 1. Create prediction (using the official models endpoint — owner/name based)
   const [owner, name] = model.id.split('/');
   const createUrl = `${BASE}/models/${owner}/${name}/predictions`;
-  const create = await axios.post(createUrl, { input }, {
-    headers: authHeaders(),
-    timeout: 30_000,
-  }).catch(err => {
-    const body = err.response?.data;
-    throw new Error(`Replicate create failed (${err.response?.status}): ${JSON.stringify(body || err.message)}`);
-  });
+
+  // Retry loop for 429 throttling (free-tier limits or burst caps)
+  let create;
+  const maxRetries = opts.maxRetries ?? 4;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      create = await axios.post(createUrl, { input }, {
+        headers: authHeaders(),
+        timeout: 30_000,
+      });
+      break;
+    } catch (err) {
+      const status = err.response?.status;
+      const body = err.response?.data;
+      const retryAfter = body?.retry_after || (status === 429 ? 5 : 0);
+      if (status === 429 && attempt < maxRetries) {
+        const waitMs = (retryAfter + 1) * 1000;
+        log.warn(`Rate-limited (429). Waiting ${waitMs}ms before retry ${attempt + 1}/${maxRetries}...`);
+        await new Promise(r => setTimeout(r, waitMs));
+        continue;
+      }
+      throw new Error(`Replicate create failed (${status}): ${JSON.stringify(body || err.message)}`);
+    }
+  }
 
   const id = create.data.id;
   let prediction = create.data;

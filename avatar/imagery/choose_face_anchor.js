@@ -32,12 +32,14 @@ async function main() {
     const { data } = await db.from('face_anchors').select('*').eq('id', arg).maybeSingle();
     target = data;
   } else {
-    const { data } = await db.from('face_anchors').select('*').like('id', `${arg}%`);
-    if (!data || data.length === 0) target = null;
-    else if (data.length > 1) {
-      log.error(`Ambiguous prefix "${arg}" matches ${data.length} rows. Use full UUID.`);
+    // Postgres can't LIKE-match a UUID column directly — fetch recent rows and match in JS.
+    const { data } = await db.from('face_anchors').select('*').order('created_at', { ascending: false }).limit(50);
+    const matches = (data || []).filter(r => r.id.startsWith(arg.toLowerCase()));
+    if (matches.length === 0) target = null;
+    else if (matches.length > 1) {
+      log.error(`Ambiguous prefix "${arg}" matches ${matches.length} rows. Use full UUID.`);
       process.exit(1);
-    } else target = data[0];
+    } else target = matches[0];
   }
 
   if (!target) {
