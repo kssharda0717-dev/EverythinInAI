@@ -99,7 +99,7 @@ async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }
     negative_prompt: negativePrompt,
     width: 832,
     height: 1216,         // 4:5 portrait — IG Reel safe
-    num_steps: 25,         // up from 20: more steps = better photorealism, less style drift
+    num_steps: 20,         // PuLID-Flux caps at 20
     start_step: 0,
     guidance_scale: 3.5,   // down from 4: lower guidance = more natural, less prompt-lean
     id_weight: 1.05,       // up from 1.0: stronger face-lock to anchor
