@@ -28,6 +28,8 @@ const MODELS = {
   instant_id:  { id: 'zsxkib/instant-id',               version: '2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789', cost_per_image: 0.02 },
   // Flux Dev with LoRA support — used for inference once we have Avi's trained LoRA
   flux_dev_lora: { id: 'black-forest-labs/flux-dev-lora', version: 'ae0d7d645446924cf1871e3ca8796e8318f72465d2b5af9323a835df93bf0917', cost_per_image: 0.025 },
+  // Voice cloning TTS for Avi (Chatterbox — high quality + cheap)
+  chatterbox:    { id: 'resemble-ai/chatterbox',    version: '1b8422bc49635c20d0a84e387ed20879c0dd09254ecdb4e75dc4bec10ff94e97', cost_per_image: 0.03 },
 };
 
 // LoRA trainer — used once to create Avi's identity LoRA. Cost: ~$2-3 flat.
