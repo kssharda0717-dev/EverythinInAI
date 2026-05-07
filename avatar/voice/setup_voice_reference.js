@@ -89,22 +89,24 @@ async function downloadYouTubeClip(youtubeUrl, outPath) {
   }
   log.info(`Downloading audio from ${youtubeUrl}...`);
   const tmpAudio = outPath.replace(/\.\w+$/, '.full.m4a');
-  // 2026 YouTube extraction needs a JS runtime. Node is already on the VM—
-  // tell yt-dlp where it is and use the web client + cookies-from-browser fallback.
-  // The --extractor-args use_pot=true triggers signature-cipher resolution via the JS interpreter.
-  const cmd = [
-    'yt-dlp',
-    '--js-runtimes', `node:$(command -v node)`,
+
+  // 2026 YouTube extraction needs a JS runtime + multi-client fallback.
+  // We use spawnSync with an argument array (no shell) so semicolons in
+  // extractor-args don't get parsed as shell separators.
+  const nodePath = execSync('command -v node').toString().trim();
+
+  const args = [
+    '--js-runtimes', `node:${nodePath}`,
     '--extractor-args', 'youtube:player_client=web,android,ios;use_pot=true',
-    '--user-agent', '"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"',
-    '-f', '"bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio"',
+    '--user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    '-f', 'bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio',
     '--no-playlist',
-    '--no-warnings',
-    '-o', `"${tmpAudio}"`,
-    `"${youtubeUrl}"`,
-  ].join(' ');
-  log.info(`Running: ${cmd}`);
-  execSync(cmd, { stdio: 'inherit', shell: '/bin/bash' });
+    '-o', tmpAudio,
+    youtubeUrl,
+  ];
+  log.info(`Running yt-dlp with ${args.length} args...`);
+  const r = spawnSync('yt-dlp', args, { stdio: 'inherit' });
+  if (r.status !== 0) throw new Error(`yt-dlp exited with code ${r.status}`);
   return tmpAudio;
 }
 
