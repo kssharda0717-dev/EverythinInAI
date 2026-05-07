@@ -52,12 +52,13 @@ const DEFAULT_REFERENCES = [
 
 function parseArgs(argv) {
   const args = {
-    url: null, audioUrl: null, label: null,
-    start: 12, duration: 10, notes: '',
+    url: null, audioUrl: null, localFile: null, label: null,
+    start: 0, duration: 10, notes: '',
   };
   for (const a of argv.slice(2)) {
     if (a.startsWith('--url=')) args.url = a.split('=').slice(1).join('=');
     else if (a.startsWith('--audio-url=')) args.audioUrl = a.split('=').slice(1).join('=');
+    else if (a.startsWith('--local-file=')) args.localFile = a.split('=').slice(1).join('=');
     else if (a.startsWith('--label=')) args.label = a.split('=')[1];
     else if (a.startsWith('--start=')) args.start = parseInt(a.split('=')[1], 10);
     else if (a.startsWith('--duration=')) args.duration = parseInt(a.split('=')[1], 10);
@@ -173,13 +174,19 @@ async function processReference(ref) {
   const clipPath = path.join(tmpDir, `${ref.label}.mp3`);
 
   let sourceAudioPath;
-  if (ref.audio_url) {
+  if (ref.local_file) {
+    if (!fs.existsSync(ref.local_file)) {
+      throw new Error(`Local file not found: ${ref.local_file}`);
+    }
+    sourceAudioPath = ref.local_file;
+    log.info(`Using local file: ${sourceAudioPath}`);
+  } else if (ref.audio_url) {
     sourceAudioPath = path.join(tmpDir, 'source.bin');
     await downloadDirectAudio(ref.audio_url, sourceAudioPath);
   } else if (ref.url) {
     sourceAudioPath = await downloadYouTubeClip(ref.url, clipPath);
   } else {
-    throw new Error('Reference needs either url (YouTube) or audio_url (direct file)');
+    throw new Error('Reference needs either local_file, audio_url, or url');
   }
 
   // Extract the trimmed/normalized clip
@@ -221,12 +228,13 @@ async function main() {
   const args = parseArgs(process.argv);
 
   let refs;
-  if (args.url || args.audioUrl) {
+  if (args.url || args.audioUrl || args.localFile) {
     refs = [{
       label: args.label || `custom-${Date.now()}`,
       url: args.url,
       audio_url: args.audioUrl,
-      source_url: args.url || args.audioUrl,
+      local_file: args.localFile,
+      source_url: args.url || args.audioUrl || `local:${args.localFile || ''}`,
       start_sec: args.start,
       duration_sec: args.duration,
       notes: args.notes,
