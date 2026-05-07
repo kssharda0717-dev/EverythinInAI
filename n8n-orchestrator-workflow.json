@@ -1,0 +1,233 @@
+{
+  "name": "EverythingInAI — v2 Orchestrator",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-incremental",
+      "name": "Every 6 Hours (Incremental)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [-400, 200]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "node-schedule-backfill",
+      "name": "Every 15 Min (Backfill)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [-400, 500]
+    },
+    {
+      "parameters": {},
+      "id": "node-manual",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [-400, 800]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Determine run mode based on trigger source\n// Scheduled 6h trigger → incremental\n// Scheduled 15m trigger → backfill\n// Manual trigger → check backfill status first, then incremental\n\nconst triggerNode = $execution.customData?.get('triggerNode') || '';\nconst manualMode = $input.first()?.json?.mode || 'auto';\n\nlet mode = 'incremental';\n\n// If coming from the backfill scheduler\nif ($execution.customData?.get('source') === 'backfill' || triggerNode.includes('Backfill')) {\n  mode = 'backfill';\n}\n\n// Manual override\nif (manualMode === 'backfill') mode = 'backfill';\nif (manualMode === 'backfill-init') mode = 'backfill-init';\nif (manualMode === 'backfill-status') mode = 'backfill-status';\nif (manualMode === 'status') mode = 'status';\n\nreturn [{ json: { mode, timestamp: new Date().toISOString() } }];"
+      },
+      "id": "node-route",
+      "name": "Determine Mode",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [-100, 500]
+    },
+    {
+      "parameters": {
+        "command": "=cd /home/ubuntu/everythininai-engine && node src/index.js {{ $json.mode }} 2>&1",
+        "timeout": 600
+      },
+      "id": "node-execute",
+      "name": "Execute Discovery Engine",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [200, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parse the engine output and extract the result JSON\nconst stdout = $input.first()?.json?.stdout || '';\nconst stderr = $input.first()?.json?.stderr || '';\nconst exitCode = $input.first()?.json?.exitCode;\n\n// Extract the structured result\nlet result = null;\nconst resultMarker = '__ENGINE_RESULT__';\nconst markerIndex = stdout.indexOf(resultMarker);\n\nif (markerIndex !== -1) {\n  const jsonStr = stdout.substring(markerIndex + resultMarker.length).trim();\n  try {\n    result = JSON.parse(jsonStr);\n  } catch (e) {\n    console.error('Failed to parse engine result:', e.message);\n  }\n}\n\n// Extract log lines (everything before the result marker)\nconst logs = markerIndex !== -1 \n  ? stdout.substring(0, markerIndex).trim()\n  : stdout.trim();\n\nconst success = exitCode === 0;\n\nreturn [{\n  json: {\n    success,\n    exitCode,\n    result,\n    logLines: logs.split('\\n').length,\n    lastLogs: logs.split('\\n').slice(-20).join('\\n'),\n    stderr: stderr ? stderr.substring(0, 1000) : '',\n    executedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "node-parse",
+      "name": "Parse Engine Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 500]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-success",
+              "leftValue": "={{ $json.success }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-check-success",
+      "name": "Engine Succeeded?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [800, 500]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log success metrics\nconst data = $input.first()?.json;\nconsole.log('Engine run completed successfully');\nconsole.log('Result:', JSON.stringify(data.result, null, 2));\nreturn [$input.first()];"
+      },
+      "id": "node-success",
+      "name": "Log Success",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log failure details for debugging\nconst data = $input.first()?.json;\nconsole.error('Engine run FAILED');\nconsole.error('Exit code:', data.exitCode);\nconsole.error('Last logs:', data.lastLogs);\nconsole.error('Stderr:', data.stderr);\n\n// Could add notification here (email, Slack, etc.)\n\nreturn [$input.first()];"
+      },
+      "id": "node-failure",
+      "name": "Log Failure & Alert",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 600]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours (Incremental)": {
+      "main": [
+        [
+          {
+            "node": "Determine Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 15 Min (Backfill)": {
+      "main": [
+        [
+          {
+            "node": "Determine Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Determine Mode",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Determine Mode": {
+      "main": [
+        [
+          {
+            "node": "Execute Discovery Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Discovery Engine": {
+      "main": [
+        [
+          {
+            "node": "Parse Engine Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Engine Output": {
+      "main": [
+        [
+          {
+            "node": "Engine Succeeded?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Engine Succeeded?": {
+      "main": [
+        [
+          {
+            "node": "Log Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Log Failure & Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": ""
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false,
+    "instanceId": "everythinginai-v2"
+  },
+  "id": "everythinginai-orchestrator-v2",
+  "tags": [
+    {
+      "name": "EverythingInAI"
+    },
+    {
+      "name": "v2"
+    }
+  ]
+}

@@ -1,0 +1,316 @@
+/*
+ * ═══════════════════════════════════════════════════════════════
+ * DESIGN SYSTEM: "Polar Luminance" — Arctic Vibe 2026
+ * Neo-Scandinavian Minimalism + Generative Art Accents
+ *
+ * Principles:
+ *   1. Absolute white canvas, depth via shadow elevation only
+ *   2. Typography as architecture — ultra-light display, bold functional
+ *   3. Organic asymmetry — varying radii, staggered heights
+ *   4. Spring physics for all motion (stiffness: 100, damping: 15)
+ *
+ * Font: Geist Variable (200 ultra-light → 700 bold)
+ * Accent: Glacier Blue oklch(0.75 0.12 230)
+ * ═══════════════════════════════════════════════════════════════
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Arctic custom tokens */
+  --color-glacier: var(--glacier);
+  --color-glacier-foreground: var(--glacier-foreground);
+  --color-aurora: var(--aurora);
+  --color-aurora-foreground: var(--aurora-foreground);
+  --color-frost: var(--frost);
+  --color-ice: var(--ice);
+
+  --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+:root {
+  --radius: 1rem;
+
+  /* Arctic White Canvas */
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.15 0.01 260);
+
+  /* Cards: pure white with no border, depth via shadow */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.15 0.01 260);
+
+  --popover: oklch(0.98 0.005 230 / 80%);
+  --popover-foreground: oklch(0.15 0.01 260);
+
+  /* Glacier Blue — primary accent */
+  --primary: oklch(0.55 0.18 230);
+  --primary-foreground: oklch(1 0 0);
+
+  /* Soft arctic grey */
+  --secondary: oklch(0.97 0.005 230);
+  --secondary-foreground: oklch(0.35 0.02 260);
+
+  --muted: oklch(0.96 0.005 230);
+  --muted-foreground: oklch(0.50 0.02 260);
+
+  --accent: oklch(0.94 0.01 230);
+  --accent-foreground: oklch(0.15 0.01 260);
+
+  --destructive: oklch(0.60 0.22 25);
+  --destructive-foreground: oklch(1 0 0);
+
+  /* Zero borders — use transparent or very faint */
+  --border: oklch(0.92 0.005 230 / 60%);
+  --input: oklch(0.95 0.005 230);
+  --ring: oklch(0.65 0.15 230);
+
+  /* Charts */
+  --chart-1: oklch(0.75 0.12 230);
+  --chart-2: oklch(0.65 0.15 230);
+  --chart-3: oklch(0.82 0.12 185);
+  --chart-4: oklch(0.55 0.18 230);
+  --chart-5: oklch(0.45 0.15 260);
+
+  --sidebar: oklch(0.98 0.005 230);
+  --sidebar-foreground: oklch(0.15 0.01 260);
+  --sidebar-primary: oklch(0.55 0.18 230);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.94 0.01 230);
+  --sidebar-accent-foreground: oklch(0.15 0.01 260);
+  --sidebar-border: oklch(0.92 0.005 230 / 40%);
+  --sidebar-ring: oklch(0.65 0.15 230);
+
+  /* Custom Arctic tokens */
+  --glacier: oklch(0.75 0.12 230);
+  --glacier-foreground: oklch(0.20 0.05 230);
+  --aurora: oklch(0.82 0.12 185);
+  --aurora-foreground: oklch(0.20 0.05 185);
+  --frost: oklch(0.97 0.01 230 / 70%);
+  --ice: oklch(0.99 0.005 230);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+    font-feature-settings: "ss01", "ss02", "cv01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  [type="button"]:not(:disabled),
+  [type="submit"]:not(:disabled),
+  [type="reset"]:not(:disabled),
+  a[href],
+  select:not(:disabled),
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled) {
+    @apply cursor-pointer;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  .flex {
+    min-height: 0;
+    min-width: 0;
+  }
+
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+      max-width: 1400px;
+    }
+  }
+
+  /* Frosted Glass — the core Arctic UI primitive */
+  .glass {
+    background: oklch(1 0 0 / 65%);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow:
+      0 1px 2px oklch(0.75 0.05 230 / 8%),
+      0 4px 16px oklch(0.75 0.05 230 / 6%),
+      inset 0 1px 0 oklch(1 0 0 / 50%);
+  }
+
+  .glass-strong {
+    background: oklch(1 0 0 / 80%);
+    backdrop-filter: blur(32px) saturate(1.6);
+    -webkit-backdrop-filter: blur(32px) saturate(1.6);
+    box-shadow:
+      0 2px 4px oklch(0.75 0.05 230 / 10%),
+      0 8px 32px oklch(0.75 0.05 230 / 8%),
+      inset 0 1px 0 oklch(1 0 0 / 60%);
+  }
+
+  /* Elevation system — no borders, only shadow depth */
+  .elevation-1 {
+    box-shadow:
+      0 1px 3px oklch(0.70 0.03 230 / 6%),
+      0 2px 8px oklch(0.70 0.03 230 / 4%);
+  }
+
+  .elevation-2 {
+    box-shadow:
+      0 2px 6px oklch(0.70 0.03 230 / 8%),
+      0 8px 24px oklch(0.70 0.03 230 / 6%);
+  }
+
+  .elevation-3 {
+    box-shadow:
+      0 4px 12px oklch(0.70 0.03 230 / 10%),
+      0 16px 48px oklch(0.70 0.03 230 / 8%);
+  }
+
+  /* Fluid typography scale */
+  .text-display {
+    font-size: clamp(2.5rem, 5vw, 4.5rem);
+    font-weight: 200;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+  }
+
+  .text-heading {
+    font-size: clamp(1.25rem, 2.5vw, 2rem);
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .text-subheading {
+    font-size: clamp(1rem, 1.5vw, 1.25rem);
+    font-weight: 400;
+    line-height: 1.4;
+    letter-spacing: -0.01em;
+  }
+
+  .text-functional {
+    font-family: "Geist Mono", ui-monospace, monospace;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+
+  /* Category badge colors */
+  .badge-llm { background: oklch(0.92 0.08 230 / 60%); color: oklch(0.35 0.12 230); }
+  .badge-image { background: oklch(0.92 0.08 330 / 60%); color: oklch(0.40 0.12 330); }
+  .badge-video { background: oklch(0.92 0.08 300 / 60%); color: oklch(0.40 0.12 300); }
+  .badge-audio { background: oklch(0.92 0.08 50 / 60%); color: oklch(0.40 0.12 50); }
+  .badge-code { background: oklch(0.92 0.08 150 / 60%); color: oklch(0.35 0.12 150); }
+  .badge-writing { background: oklch(0.92 0.08 80 / 60%); color: oklch(0.40 0.12 80); }
+  .badge-search { background: oklch(0.92 0.08 260 / 60%); color: oklch(0.35 0.12 260); }
+  .badge-productivity { background: oklch(0.92 0.08 185 / 60%); color: oklch(0.35 0.12 185); }
+  .badge-data { background: oklch(0.92 0.08 200 / 60%); color: oklch(0.35 0.12 200); }
+  .badge-agent { background: oklch(0.92 0.08 280 / 60%); color: oklch(0.35 0.12 280); }
+  .badge-dev { background: oklch(0.92 0.08 160 / 60%); color: oklch(0.35 0.12 160); }
+  .badge-other { background: oklch(0.94 0.02 230 / 60%); color: oklch(0.45 0.02 260); }
+
+  /* Shimmer skeleton */
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      oklch(0.96 0.005 230) 0%,
+      oklch(0.98 0.005 230) 40%,
+      oklch(0.96 0.005 230) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  @keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* Scrollbar hide utility */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.85 0.03 230);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.75 0.05 230);
+}
+
+/* Selection color */
+::selection {
+  background: oklch(0.75 0.12 230 / 25%);
+  color: oklch(0.15 0.01 260);
+}
