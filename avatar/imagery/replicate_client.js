@@ -24,8 +24,16 @@ const MODELS = {
   flux_pro:    { id: 'black-forest-labs/flux-1.1-pro',  version: '609793a667ed94b210242837d3c3c9fc9a64ae93685f15d75002ba0ed9a97f2b', cost_per_image: 0.04 },
   flux_schnell:{ id: 'black-forest-labs/flux-schnell',  version: 'c846a69991daf4c0e5d016514849d14ee5b2e6846ce6b9d6f21369e564cfe51e', cost_per_image: 0.003 },
   flux_pulid:  { id: 'zsxkib/flux-pulid',               version: '8baa7ef2255075b46f4d91cd238c21d31181b3e6a864463f967960bb0112525b', cost_per_image: 0.05 },
-  // InstantID-SDXL — photoreal-first identity lock. Industry standard for AI influencers.
+  // InstantID-SDXL — photoreal-first identity lock. Industry standard for AI personas.
   instant_id:  { id: 'zsxkib/instant-id',               version: '2e4785a4d80dadf580077b2244c8d7c05d8e3faac04a04c02d8e099dd2876789', cost_per_image: 0.02 },
+  // Flux Dev with LoRA support — used for inference once we have Avi's trained LoRA
+  flux_dev_lora: { id: 'black-forest-labs/flux-dev-lora', version: 'ae0d7d645446924cf1871e3ca8796e8318f72465d2b5af9323a835df93bf0917', cost_per_image: 0.025 },
+};
+
+// LoRA trainer — used once to create Avi's identity LoRA. Cost: ~$2-3 flat.
+const TRAINER = {
+  id: 'ostris/flux-dev-lora-trainer',
+  version: '26dce37af90b9d997eeb970d92e47de3064d46c300504ae376c75bef6a9022d2',
 };
 
 function authHeaders() {
@@ -118,4 +126,4 @@ async function runModel(modelKey, input, opts = {}) {
   return { output: outputs, prediction, cost_usd, generation_ms };
 }
 
-module.exports = { runModel, MODELS };
+module.exports = { runModel, MODELS, TRAINER, BASE, authHeaders };

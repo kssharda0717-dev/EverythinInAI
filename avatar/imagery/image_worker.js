@@ -62,65 +62,50 @@ async function getConcept(db, args) {
   return null;
 }
 
-function buildKeyframePrompt(persona, sceneDescription, sceneCaption) {
-  // The persona descriptor is REPEATED in every prompt so PuLID has full context.
-  // We deliberately don't put face details in the prompt — PuLID handles that
-  // from the conditioning image. We only describe wardrobe + setting + scene.
-  //
-  // CRITICAL: This template MUST keep PuLID-Flux from drifting into stylized /
-  // cartoon territory (the base Flux + PuLID combo has a known bias toward
-  // illustration). We anchor it to "photograph" 5+ times and reject all
-  // illustration tokens up front.
+function buildKeyframePrompt(persona, sceneDescription, sceneCaption, trigger = 'AVI_TOK') {
+  // The trigger word activates the trained LoRA. It MUST be the first thing.
+  // The LoRA already encodes Avi's face/skin/hair — we don't need to describe
+  // her identity, only the scene + outfit + lighting + style.
   return [
-    `Real DSLR photograph (NOT illustration, NOT painting, NOT cartoon, NOT cgi, NOT digital art) of a 25-year-old Indian woman content creator (Avi).`,
-    `Warm wheatish skin tone with natural visible pores and fine peach fuzz, soft makeup, no filter look.`,
-    `Long dark brown hair softly waved, athletic-feminine build with normal proportions.`,
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
     sceneDescription,
     `Wearing a fitted ribbed cream knit top with high crew neck OR oversized beige cardigan over a high-neck top OR fitted blazer buttoned over a high-neck top. Modest, sophisticated, NEVER plunging, NEVER low-cut, NEVER showing cleavage. Palette of cream, beige, forest green, ivory, with delicate matte gold jewelry.`,
     `Indoor minimalist Bandra studio apartment OR cozy book-lined corner, soft warm window light or studio editorial lighting, plants and hardcover books in soft bokeh, matte black laptop visible.`,
-    `Photograph shot on Sony A7R IV with 35mm or 85mm prime lens at f/1.8, shallow depth of field, natural skin texture, subtle 35mm film grain, magazine editorial photography, Vogue India aesthetic, candid documentary feel, photorealistic.`,
+    `Photograph shot on Sony A7R IV with 35mm or 85mm prime lens at f/1.8, shallow depth of field, natural skin texture with visible pores, subtle 35mm film grain, magazine editorial photography, Vogue India aesthetic, candid documentary feel, photorealistic, NOT illustration, NOT cartoon, NOT cgi.`,
   ].join(' ');
 }
 
-async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }) {
+async function renderKeyframe({ persona, kf, idx, conceptId, dryRun }) {
   const sceneDesc = kf.prompt || `Standing thoughtfully, looking at the camera`;
-  const fullPrompt = buildKeyframePrompt(persona, sceneDesc, kf.scene_caption);
-  const negativePrompt = await personaService.buildNegativePrompt();
+  const trigger = persona.active_lora_trigger || 'AVI_TOK';
+  const fullPrompt = buildKeyframePrompt(persona, sceneDesc, kf.scene_caption, trigger);
 
   if (dryRun) {
     log.info(`── DRY KEYFRAME[${idx}] ──`);
     log.info(`PROMPT:\n${fullPrompt}`);
-    log.info(`NEGATIVE:\n${negativePrompt}`);
     return { skipped: true };
+  }
+
+  if (!persona.active_lora_url) {
+    throw new Error('Persona has no active_lora_url. Run train_lora.js first.');
   }
 
   const seed = Math.floor(Math.random() * 1_000_000);
 
-  // Using InstantID-SDXL (photoreal-first, industry standard for AI personas).
-  // Key params:
-  //   ip_adapter_scale = identity strength. 0.8 default keeps face but lets pose/scene vary.
-  //                      We use 0.8 (sweet spot — too high = stiff, too low = drifts off).
-  //   controlnet_conditioning_scale = how strongly the pose/canny/depth controlnets steer.
-  //                                    0.8 default is balanced.
-  //   guidance_scale = prompt adherence. 5 = relaxed/natural; we use 5.
-  //   num_inference_steps = quality. 30 = balanced (vs 50 = slower).
-  const result = await runModel('instant_id', {
-    image: anchorUrl,                     // Avi's locked face anchor
+  // Using Flux Dev with Avi's trained LoRA — the production path.
+  // The LoRA encodes Avi's identity from the 20-image training set.
+  // The trigger word "AVI_TOK" must appear in every prompt for the LoRA to activate.
+  const result = await runModel('flux_dev_lora', {
     prompt: fullPrompt,
-    negative_prompt: negativePrompt,
-    width: 832,
-    height: 1216,                          // 4:5 portrait
+    lora_weights: persona.active_lora_url,
+    lora_scale: 1.0,                     // 1.0 = full LoRA strength
+    aspect_ratio: '4:5',                  // IG Reel portrait
     num_outputs: 1,
-    num_inference_steps: 30,
-    guidance_scale: 5,
-    ip_adapter_scale: 0.8,                 // identity strength
-    controlnet_conditioning_scale: 0.8,    // overall control strength
-    enable_pose_controlnet: true,
-    enhance_nonface_region: true,          // critical for body/clothing realism
+    num_inference_steps: 28,
+    guidance: 3.0,                        // Flux Dev natural setting
     output_format: 'webp',
     output_quality: 92,
-    sdxl_weights: 'stable-diffusion-xl-base-1.0',
-    scheduler: 'EulerDiscreteScheduler',
+    go_fast: false,                       // false = full quality
     seed,
   }, { timeoutMs: 300_000 });
 
@@ -131,7 +116,7 @@ async function renderKeyframe({ persona, anchorUrl, kf, idx, conceptId, dryRun }
   return {
     image_url: hosted.publicUrl,
     storage_path: hosted.storagePath,
-    model: 'instant-id-sdxl',
+    model: 'flux-dev-lora',
     is_face_locked: true,
     seed,
     cost_usd: result.cost_usd,
@@ -151,13 +136,14 @@ async function main() {
   log.info(`Concept: ${concept.title} (${concept.id})`);
 
   const persona = await personaService.getActivePersona('avi');
-  if (!persona.canonical_face_url) {
-    log.error('Persona has no canonical_face_url. Run generate_face_anchors.js then choose_face_anchor.js first.');
+  if (!persona.active_lora_url) {
+    log.error('Persona has no active_lora_url. Train Avi\'s LoRA first:');
+    log.error('  1. node avatar/imagery/generate_training_set.js');
+    log.error('  2. node avatar/imagery/train_lora.js');
     process.exit(1);
   }
-
-  const anchorUrl = persona.canonical_face_url;
-  log.info(`Using face anchor: ${anchorUrl}`);
+  log.info(`Using LoRA: ${persona.active_lora_url}`);
+  log.info(`Trigger word: ${persona.active_lora_trigger}`);
 
   // Update concept state
   if (!args.dryRun) {
@@ -195,7 +181,7 @@ async function main() {
     log.info(`Keyframe ${i + 1}/${renderList.length}`);
     try {
       const r = await renderKeyframe({
-        persona, anchorUrl, kf, idx: i, conceptId: concept.id, dryRun: args.dryRun,
+        persona, kf, idx: i, conceptId: concept.id, dryRun: args.dryRun,
       });
       if (r.skipped) continue;
 
