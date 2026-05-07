@@ -120,18 +120,16 @@ async function downloadDirectAudio(url, outPath) {
 
 function extractClip(srcPath, startSec, durationSec, outPath) {
   log.info(`Extracting ${durationSec}s clip starting at ${startSec}s → ${outPath}`);
-  // Trim, downmix to mono, export as 22050 Hz MP3 (Chatterbox-friendly).
-  // Skip loudnorm — iPhone recording is already at decent loudness AND loudnorm's
-  // 2-pass analysis can stall on a 1GB RAM VM. Use simple peak-norm via volume filter.
+  // Chatterbox requires WAV input (PCM 16-bit). Export as WAV mono 24kHz.
   const r = spawnSync('ffmpeg', [
     '-y',
     '-ss', String(startSec),
     '-i', srcPath,
     '-t', String(durationSec),
     '-ac', '1',
-    '-ar', '22050',
-    '-af', 'dynaudnorm=p=0.71:g=15',   // single-pass normalization, fast
-    '-b:a', '128k',
+    '-ar', '24000',
+    '-af', 'dynaudnorm=p=0.71:g=15',
+    '-c:a', 'pcm_s16le',
     outPath,
   ], { stdio: 'inherit', timeout: 60_000 });
   if (r.status !== 0) throw new Error(`ffmpeg extraction failed (status=${r.status})`);
@@ -140,11 +138,11 @@ function extractClip(srcPath, startSec, durationSec, outPath) {
 async function uploadAudio(localPath, persona, label) {
   const db = dbModule.getClient();
   const buf = fs.readFileSync(localPath);
-  const storagePath = `voice-refs/${persona.slug}/${label}-${Date.now()}.mp3`;
+  const storagePath = `voice-refs/${persona.slug}/${label}-${Date.now()}.wav`;
   const { error } = await db.storage
     .from('avi-images')                  // reuse existing bucket
     .upload(storagePath, buf, {
-      contentType: 'audio/mpeg',
+      contentType: 'audio/wav',
       upsert: true,
       cacheControl: '31536000',
     });
@@ -173,7 +171,7 @@ async function processReference(ref) {
   ensureTools();
 
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'avi-voice-'));
-  const clipPath = path.join(tmpDir, `${ref.label}.mp3`);
+  const clipPath = path.join(tmpDir, `${ref.label}.wav`);
 
   let sourceAudioPath;
   if (ref.local_file) {
