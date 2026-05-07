@@ -51,16 +51,20 @@ async function runModel(modelKey, input, opts = {}) {
   const startMs = Date.now();
   log.info(`→ ${modelKey}  (${JSON.stringify(input).substring(0, 120)}...)`);
 
-  // 1. Create prediction (using the official models endpoint — owner/name based)
-  const [owner, name] = model.id.split('/');
-  const createUrl = `${BASE}/models/${owner}/${name}/predictions`;
+  // 1. Create prediction
+  // Use the universal /v1/predictions endpoint with `version` field. This works
+  // for both official models (black-forest-labs/*) and community models
+  // (zsxkib/*, etc.) consistently. The /v1/models/{owner}/{name}/predictions
+  // endpoint only works for some official models.
+  const createUrl = `${BASE}/predictions`;
+  const createBody = { version: model.version, input };
 
   // Retry loop for 429 throttling (free-tier limits or burst caps)
   let create;
   const maxRetries = opts.maxRetries ?? 4;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      create = await axios.post(createUrl, { input }, {
+      create = await axios.post(createUrl, createBody, {
         headers: authHeaders(),
         timeout: 30_000,
       });
