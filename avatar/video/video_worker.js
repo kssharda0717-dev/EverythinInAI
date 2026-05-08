@@ -1,39 +1,46 @@
 #!/usr/bin/env node
 /**
- * EverythinInAI — Video Worker (Phase 11 v2 — talking-head)
+ * EverythinInAI — Video Worker (Phase 11.5: engagement edit)
  *
- * Final assembly. Takes the SadTalker-generated talking-head MP4
- * and burns word-level captions on top.
- *
- * Pre-conditions:
- *   1. concept.voice_url is set       (voice_worker.js)
- *   2. reel_keyframes has hero        (hero_worker.js)
- *   3. lipsync_worker.js produced concept.video_url (talking-head MP4)
+ * Pipeline (after lipsync_worker has produced the talking-head MP4):
+ *   1. Generate word-level captions (Whisper)
+ *   2. Plan engagement (B-roll cuts + zoom punches + SFX events)
+ *   3. Generate B-roll assets (Microlink screenshots / stat callouts)
+ *   4. Cache music + SFX assets
+ *   5. Apply visual edits (B-roll overlays + zoom punches + scale)
+ *   6. Mix audio (voice + music bed + SFX)
+ *   7. Burn bouncy captions
+ *   8. Upload final MP4
  *
  * Usage:
- *   node avatar/video/video_worker.js <concept_id>
  *   node avatar/video/video_worker.js --winner
+ *   node avatar/video/video_worker.js <concept_id>
+ *   node avatar/video/video_worker.js --winner --no-music   # skip music bed
+ *   node avatar/video/video_worker.js --winner --no-broll   # skip B-roll cuts
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const axios = require('axios');
-const { spawnSync } = require('child_process');
 const dbModule = require('../../engine/core/database');
 const { createLogger } = require('../../engine/utils/logger');
-const { generateCaptions } = require('./caption_generator');
-const { buildAssSubtitles } = require('./video_assembler');
+const { generateCaptions, buildBouncyAss } = require('./caption_generator');
+const { planEngagement } = require('./engagement_planner');
+const { screenshotUrl, generateStatCallout } = require('./broll_generator');
+const { getMusicTrack, getSfx } = require('./asset_library');
+const {
+  applyVisualEdits, mixAudio, burnCaptions, downloadFile,
+  W, H,
+} = require('./video_assembler');
 
 const log = createLogger('video_worker');
 
-const W = 1080;
-const H = 1350;     // 4:5
-
 function parseArgs(argv) {
-  const args = { conceptId: null, useWinner: false, date: null };
+  const args = { conceptId: null, useWinner: false, date: null, noMusic: false, noBroll: false };
   for (const a of argv.slice(2)) {
     if (a === '--winner') args.useWinner = true;
+    else if (a === '--no-music') args.noMusic = true;
+    else if (a === '--no-broll') args.noBroll = true;
     else if (a.startsWith('--date=')) args.date = a.split('=')[1];
     else if (!a.startsWith('--')) args.conceptId = a;
   }
@@ -57,13 +64,13 @@ async function getConcept(db, args) {
   return null;
 }
 
-async function downloadFile(url, destPath) {
-  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 300_000 });
-  fs.writeFileSync(destPath, Buffer.from(resp.data));
-  return destPath;
+async function getSignalUrl(db, signalId) {
+  if (!signalId) return null;
+  const { data } = await db.from('ai_signals').select('url, entities, topics').eq('id', signalId).maybeSingle();
+  return data;
 }
 
-async function uploadVideo(localPath, conceptId) {
+async function uploadFinal(localPath, conceptId) {
   const db = dbModule.getClient();
   const buf = fs.readFileSync(localPath);
   const storagePath = `reels/${conceptId}/${Date.now()}-final.mp4`;
@@ -79,91 +86,118 @@ async function uploadVideo(localPath, conceptId) {
   return { publicUrl: pub.publicUrl, storagePath, sizeBytes: buf.length };
 }
 
-/**
- * Burn ASS captions onto a talking-head MP4 + scale to 1080x1350.
- */
-function burnCaptions(inputMp4, subAssPath, outputMp4) {
-  // Scale to fit 1080x1350 (pad with blur if aspect doesn't match)
-  // Then burn the ASS subtitles
-  const escapedSub = subAssPath.replace(/\\/g, '/').replace(/:/g, '\\:');
-
-  const filter = [
-    // Scale to fit, preserve aspect, pad with blurred copy of self for cinematic look
-    `[0:v]split=2[main][bg]`,
-    `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=30[bg2]`,
-    `[main]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg]`,
-    `[bg2][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[v]`,
-    `[v]ass=${escapedSub}[vout]`,
-  ].join(';');
-
-  const args = [
-    '-y',
-    '-i', inputMp4,
-    '-filter_complex', filter,
-    '-map', '[vout]',
-    '-map', '0:a?',
-    '-c:v', 'libx264',
-    '-preset', 'medium',
-    '-crf', '20',
-    '-pix_fmt', 'yuv420p',
-    '-c:a', 'aac',
-    '-b:a', '192k',
-    '-ar', '44100',
-    '-r', '30',
-    '-shortest',
-    outputMp4,
-  ];
-
-  log.info(`Running ffmpeg burn (${args.length} args)...`);
-  const r = spawnSync('ffmpeg', args, { stdio: 'inherit', timeout: 300_000 });
-  if (r.status !== 0) throw new Error(`ffmpeg burn failed (status=${r.status})`);
-}
-
 async function main() {
   const args = parseArgs(process.argv);
   const db = dbModule.getClient();
-  const concept = await getConcept(db, args);
-  if (!concept) {
-    log.error('No concept found. Use --winner or pass a concept_id.');
-    process.exit(1);
-  }
-  log.info(`Concept: ${concept.title} (${concept.id})`);
 
-  if (!concept.voice_url) {
-    log.error('No voice_url. Run voice_worker.js first.');
-    process.exit(1);
-  }
-  if (!concept.video_url) {
-    log.error('No video_url (talking-head). Run lipsync_worker.js first.');
-    process.exit(1);
-  }
+  const concept = await getConcept(db, args);
+  if (!concept) { log.error('No concept. Use --winner or pass id.'); process.exit(1); }
+  log.info(`Concept: ${concept.title}`);
+
+  if (!concept.voice_url) { log.error('No voice_url'); process.exit(1); }
+    if (!concept.talking_head_url) { log.error('No talking_head_url (run lipsync_worker.js first)'); process.exit(1); }
+
+
+  // Enrich concept with signal data
+  const signalData = await getSignalUrl(db, concept.signal_id);
+  const enrichedConcept = {
+    ...concept,
+    signal_url: signalData?.url || null,
+    entities: signalData?.entities || [],
+    topics: signalData?.topics || [],
+  };
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `final-${concept.id.slice(0, 8)}-`));
   log.info(`Workspace: ${workDir}`);
 
   try {
-    // 1. Generate captions from voice
-    log.info(`Generating word-level captions from voice...`);
+    // 1. Captions
+    log.info(`[1/7] Generating word-level captions...`);
     const captions = await generateCaptions(concept.voice_url);
 
-    // 2. Write ASS file
-    const subPath = path.join(workDir, 'captions.ass');
-    fs.writeFileSync(subPath, buildAssSubtitles(captions.cues, captions.duration));
+    // 2. Engagement plan
+    log.info(`[2/7] Planning engagement...`);
+    const plan = planEngagement(captions.cues, enrichedConcept);
 
-    // 3. Download the talking-head MP4
-    const talkingHeadPath = path.join(workDir, 'talking-head.mp4');
+    if (args.noBroll) {
+      plan.broll_cuts = [];
+      log.info('   B-roll disabled by flag');
+    }
+
+    // 3. Generate B-roll assets
+    log.info(`[3/7] Generating ${plan.broll_cuts.length} B-roll asset(s)...`);
+    const brollLocalPaths = [];
+    for (let i = 0; i < plan.broll_cuts.length; i++) {
+      const cut = plan.broll_cuts[i];
+      const brollPath = path.join(workDir, `broll-${i}.png`);
+      try {
+        if (cut.type === 'screenshot' && cut.source_url) {
+          await screenshotUrl(cut.source_url, brollPath, { width: W, height: H });
+        } else if (cut.type === 'stat_callout') {
+          generateStatCallout(cut.stat_text || '?', cut.stat_subtext || '', brollPath, { width: W, height: H });
+        }
+        if (fs.existsSync(brollPath) && fs.statSync(brollPath).size > 1000) {
+          brollLocalPaths.push(brollPath);
+        } else {
+          log.warn(`   Skipped B-roll #${i} (empty file)`);
+          plan.broll_cuts.splice(i, 1);
+          i--;
+        }
+      } catch (err) {
+        log.warn(`   B-roll #${i} failed: ${err.message} \u2014 skipping`);
+        plan.broll_cuts.splice(i, 1);
+        i--;
+      }
+    }
+
+    // 4. Cache audio assets
+    log.info(`[4/7] Caching audio assets...`);
+    const musicPath = args.noMusic ? null : await getMusicTrack('calm');
+    const sfxAssetMap = {};
+    for (const ev of plan.sfx_events) {
+      if (!sfxAssetMap[ev.type]) sfxAssetMap[ev.type] = await getSfx(ev.type);
+    }
+
+    // 5. Download base talking-head
+    const baseMp4 = path.join(workDir, 'base.mp4');
     log.info(`Downloading talking-head MP4...`);
-    await downloadFile(concept.video_url, talkingHeadPath);
+        await downloadFile(concept.talking_head_url, baseMp4);
 
-    // 4. Burn captions + scale to 1080x1350
-    const outputPath = path.join(workDir, 'final.mp4');
-    burnCaptions(talkingHeadPath, subPath, outputPath);
 
-    // 5. Upload final
-    log.info(`Uploading final MP4 to Supabase Storage...`);
-    const hosted = await uploadVideo(outputPath, concept.id);
+    // 6. Apply visual edits (B-roll + zoom + scale to 1080x1350)
+    log.info(`[5/7] Applying visual edits...`);
+    const visualMp4 = path.join(workDir, 'visual.mp4');
+    await applyVisualEdits({
+      inputMp4: baseMp4,
+      plan,
+      brollLocalPaths,
+      outputMp4: visualMp4,
+      totalDuration: captions.duration,
+    });
 
-    // 6. Update concept (overwrite video_url with the FINAL captioned version)
+    // 7. Audio mix
+    log.info(`[6/7] Mixing audio (voice + music + SFX)...`);
+    const mixedMp4 = path.join(workDir, 'mixed.mp4');
+    await mixAudio({
+      inputMp4: visualMp4,
+      musicPath,
+      sfxEvents: plan.sfx_events,
+      sfxAssetMap,
+      outputMp4: mixedMp4,
+      totalDuration: captions.duration,
+    });
+
+    // 8. Captions
+    log.info(`[7/7] Burning bouncy captions...`);
+    const subPath = path.join(workDir, 'captions.ass');
+    fs.writeFileSync(subPath, buildBouncyAss(captions.cues, captions.duration, { width: W, height: H }));
+    const finalMp4 = path.join(workDir, 'final.mp4');
+    await burnCaptions({ inputMp4: mixedMp4, subAssPath: subPath, outputMp4: finalMp4 });
+
+    // 9. Upload
+    log.info(`Uploading final MP4...`);
+    const hosted = await uploadFinal(finalMp4, concept.id);
+
     await db.from('reel_concepts').update({
       video_url: hosted.publicUrl,
       state: 'ready',
@@ -171,11 +205,15 @@ async function main() {
     }).eq('id', concept.id);
 
     log.info(`══════════════════════════════════════════════`);
-    log.info(`✓ FINAL Reel ready.`);
+    log.info(`✓ ENGAGEMENT-EDITED Reel ready.`);
     log.info(`   url       : ${hosted.publicUrl}`);
     log.info(`   duration  : ${captions.duration.toFixed(2)}s`);
     log.info(`   size      : ${(hosted.sizeBytes / 1024 / 1024).toFixed(2)} MB`);
-    log.info(`   captions  : ${captions.cues.length} cues`);
+    log.info(`   captions  : ${captions.cues.length} bouncy cues`);
+    log.info(`   B-roll    : ${plan.broll_cuts.length} cuts`);
+    log.info(`   zoom punches: ${plan.zoom_punches.length}`);
+    log.info(`   SFX       : ${plan.sfx_events.length} events`);
+    log.info(`   music     : ${musicPath ? path.basename(musicPath) : 'disabled'}`);
     log.info(`══════════════════════════════════════════════`);
   } finally {
     if (process.exitCode !== 1) {

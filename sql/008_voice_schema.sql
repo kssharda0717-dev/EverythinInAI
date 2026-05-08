@@ -55,7 +55,8 @@ ALTER TABLE reel_concepts
     ADD COLUMN IF NOT EXISTS voice_storage_path TEXT,
     ADD COLUMN IF NOT EXISTS voice_duration_sec NUMERIC(6, 2),
     ADD COLUMN IF NOT EXISTS voice_cost_usd NUMERIC(10, 4),
-    ADD COLUMN IF NOT EXISTS voice_model TEXT;
+    ADD COLUMN IF NOT EXISTS voice_model TEXT,
+    ADD COLUMN IF NOT EXISTS talking_head_url TEXT;     -- raw OmniHuman output (pre-engagement-edit)
 
 SELECT 'voice schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'persona_voice_refs') AS exists;

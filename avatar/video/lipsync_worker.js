@@ -133,9 +133,9 @@ async function main() {
     conceptId: concept.id,
   });
 
-  // Save talking-head URL to concept (we'll burn captions on top in the next step)
+  // Save raw talking-head URL (engagement editor reads this; it's pre-edit)
   await db.from('reel_concepts').update({
-    video_url: result.publicUrl,           // base talking-head, NOT final yet
+    talking_head_url: result.publicUrl,
     updated_at: new Date().toISOString(),
   }).eq('id', concept.id);
 

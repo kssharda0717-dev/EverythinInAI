@@ -105,4 +105,53 @@ async function generateCaptions(audioUrl) {
   };
 }
 
-module.exports = { generateCaptions, srtTime, buildCues, cuesToSrt };
+/**
+ * Build a punchy ASS subtitle file with bouncy per-word animations.
+ * Style: huge bold white text, black outline, drop shadow, scale-bounce on entry,
+ * yellow highlight on emphasis words.
+ */
+function buildBouncyAss(cues, totalSeconds, opts = {}) {
+  const W = opts.width || 1080;
+  const H = opts.height || 1350;
+
+  const header = `[Script Info]
+ScriptType: v4.00+
+PlayResX: ${W}
+PlayResY: ${H}
+WrapStyle: 0
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Montserrat,110,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
+Style: Highlight,Montserrat,110,&H0000FFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+`;
+
+  const HIGHLIGHT_WORDS = /^(WILD|UNHINGED|CRAZY|HUGE|MASSIVE|HONESTLY|LITERALLY|YAAR|MATLAB|OKAY)$/i;
+
+  const events = cues.map(c => {
+    const start = assTime2(c.start);
+    const end = assTime2(c.end);
+    const isHighlight = HIGHLIGHT_WORDS.test(c.text.replace(/[^a-z]/gi, ''));
+    const style = isHighlight ? 'Highlight' : 'Default';
+    // Scale-bounce: pop in 1.4× → settle to 1× over 150ms
+    // Plus quick fade in/out (60/60 ms)
+    const text = `{\\fad(60,60)\\fscx140\\fscy140\\t(0,150,\\fscx100\\fscy100)}${c.text}`;
+    return `Dialogue: 0,${start},${end},${style},,0,0,0,,${text}`;
+  }).join('\n');
+
+  return header + events;
+}
+
+function assTime2(seconds) {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = (seconds % 60).toFixed(2);
+  const [sec, cs] = s.split('.');
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}.${cs}`;
+}
+
+module.exports = { generateCaptions, srtTime, buildCues, cuesToSrt, buildBouncyAss };
