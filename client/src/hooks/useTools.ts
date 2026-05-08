@@ -169,13 +169,37 @@ export function useTools() {
         .or(
           `name.ilike.${term},display_name.ilike.${term},tagline.ilike.${term},category.ilike.${term},description.ilike.${term}`
         )
-        .order('upvotes', { ascending: false })
-        .limit(50);
+        .limit(100);
 
       if (error) throw error;
       const mapped = (data || []).map(mapBackendTool);
-      setFilteredTools(mapped);
-      setTotalTools(mapped.length);
+
+      // Score-based ranking: exact name > prefix > contains > tagline > description
+      const q = query.trim().toLowerCase();
+      const scored = mapped.map((t) => {
+        const name = (t.name || '').toLowerCase();
+        const dn = (t.displayName || '').toLowerCase();
+        const tag = (t.tagline || '').toLowerCase();
+        const desc = (t.description || '').toLowerCase();
+        const cat = (t.category || '').toLowerCase();
+        let score = 0;
+        if (name === q) score += 1000;
+        if (dn === q) score += 800;
+        if (name.startsWith(q)) score += 500;
+        if (dn.startsWith(q)) score += 400;
+        if (name.includes(q)) score += 200;
+        if (dn.includes(q)) score += 150;
+        if (cat === q) score += 200;
+        if (tag.includes(q)) score += 50;
+        if (desc.includes(q)) score += 10;
+        score += Math.log10(Math.max(1, (t.upvotes || 0)));
+        return { tool: t, score };
+      });
+      scored.sort((a, b) => b.score - a.score);
+      const ranked = scored.slice(0, 50).map((s) => s.tool);
+
+      setFilteredTools(ranked);
+      setTotalTools(ranked.length);
       setIsApiConnected(true);
     } catch (err: any) {
       console.warn('[useTools] Search fell back to mock:', err.message);
