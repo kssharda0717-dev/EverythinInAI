@@ -1,12 +1,18 @@
 /*
- * EverythinInAI — Newsletter Signup
+ * EverythinInAI — Newsletter Signup (modal-friendly)
  * Compact email signup that posts to /api/newsletter
+ *
+ * `compact` prop renders a one-line variant for inline (e.g. modal) use.
  */
 
 import { useState } from 'react';
 import { Mail, Check, Loader2 } from 'lucide-react';
 
-export default function NewsletterSignup() {
+interface NewsletterSignupProps {
+  compact?: boolean;
+}
+
+export default function NewsletterSignup({ compact = false }: NewsletterSignupProps) {
   const [email, setEmail] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'err'>('idle');
   const [message, setMessage] = useState('');
@@ -36,6 +42,41 @@ export default function NewsletterSignup() {
       setStatus('err');
       setMessage(err.message || 'Network error.');
     }
+  }
+
+  if (compact) {
+    return (
+      <div className="w-full">
+        <form onSubmit={submit} className="flex gap-2">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            disabled={status === 'loading'}
+            className="flex-1 px-4 py-3 rounded-xl bg-[oklch(0.97_0.005_230)] text-base placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-[oklch(0.55_0.18_230)/_0.3]"
+          />
+          <button
+            type="submit"
+            disabled={status === 'loading' || status === 'ok'}
+            className="px-6 py-3 rounded-xl bg-gradient-to-br from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white text-base font-medium hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center gap-2"
+          >
+            {status === 'loading' && <Loader2 className="w-4 h-4 animate-spin" />}
+            {status === 'ok' && <Check className="w-4 h-4" />}
+            {status === 'idle' && 'Subscribe'}
+            {status === 'err' && 'Try again'}
+            {status === 'ok' && 'Subscribed'}
+            {status === 'loading' && 'Joining…'}
+          </button>
+        </form>
+        {message && (
+          <p className={`text-sm mt-3 ${status === 'ok' ? 'text-green-600' : 'text-red-600'}`}>
+            {message}
+          </p>
+        )}
+      </div>
+    );
   }
 
   return (

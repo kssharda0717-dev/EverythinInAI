@@ -81,13 +81,38 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {/* Divider */}
                 <div className="h-px bg-gradient-to-r from-transparent via-[oklch(0.90_0.01_230)] to-transparent mb-6" />
 
-                {/* Description */}
+                {/* About — long-form 200-word description */}
                 <div className="mb-8">
-                  <h3 className="text-functional text-muted-foreground mb-3">About</h3>
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    {tool.description}
-                  </p>
+                  <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">About {tool.name}</h3>
+                  <div className="text-[15px] text-foreground/85 leading-[1.7] space-y-3">
+                    {(tool.description || tool.tagline || '')
+                      .split(/\n+/)
+                      .filter(p => p.trim().length > 0)
+                      .map((para, i) => <p key={i}>{para}</p>)}
+                    {(!tool.description || tool.description.length < 50) && (
+                      <p className="italic text-muted-foreground text-xs">
+                        Detailed description coming soon — our AI is enriching this tool's profile.
+                      </p>
+                    )}
+                  </div>
                 </div>
+
+                {/* Who it's for / Best for */}
+                {tool.tags.length > 0 && (
+                  <div className="mb-8">
+                    <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">Best For</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {tool.tags.slice(0, 6).map((tag) => (
+                        <span
+                          key={tag}
+                          className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-br from-[oklch(0.97_0.01_230)] to-[oklch(0.95_0.02_210)] text-foreground border border-[oklch(0.92_0.01_230)]"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Metadata grid */}
                 <div className="grid grid-cols-2 gap-4 mb-8">
@@ -123,29 +148,9 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   </a>
                 )}
 
-                {/* Tags */}
-                {tool.tags.length > 0 && (
-                  <div className="mb-8">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Tag className="w-3.5 h-3.5 text-muted-foreground" />
-                      <span className="text-functional text-muted-foreground">Tags</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {tool.tags.map((tag) => (
-                        <span
-                          key={tag}
-                          className="px-3 py-1 rounded-lg text-xs font-medium bg-[oklch(0.96_0.005_230)] text-muted-foreground"
-                        >
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 {/* Discovery source attribution (small footnote) */}
-                <div className="flex items-center gap-3 pt-4 border-t border-[oklch(0.92_0.01_230)/_0.5]">
-                  <span className="text-functional text-muted-foreground/60">
+                <div className="flex items-center gap-3 pt-6 mt-6 border-t border-[oklch(0.92_0.01_230)/_0.5]">
+                  <span className="text-[0.65rem] text-muted-foreground/60 uppercase tracking-wider">
                     Discovered via {tool.source.replace(/_/g, ' ')}
                   </span>
                 </div>

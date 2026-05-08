@@ -4,13 +4,16 @@
  * Minimal: logo + nav links + magnetic Launchpad CTA.
  */
 
-import { motion, useScroll, useTransform } from "framer-motion";
-import { Sparkles, Rocket } from "lucide-react";
+import { useState } from "react";
+import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
+import { Sparkles, Rocket, Mail, X } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import MagneticButton from "./MagneticButton";
+import NewsletterSignup from "./NewsletterSignup";
 
 export default function Navbar() {
   const [location, setLocation] = useLocation();
+  const [newsletterOpen, setNewsletterOpen] = useState(false);
 
   // Logo click — if already on home, force a full reset (scroll top + reload state).
   // This ensures any in-page search filter clears even when wouter doesn't unmount the page.
@@ -68,23 +71,75 @@ export default function Navbar() {
                 Discover
               </div>
             </Link>
+            <Link href="/launchpad">
+              <div
+                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                  location === "/launchpad"
+                    ? "bg-[oklch(0.94_0.01_230)] text-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-[oklch(0.97_0.005_230)]"
+                }`}
+              >
+                <Rocket className="w-3.5 h-3.5" />
+                Launchpad
+              </div>
+            </Link>
+            {/* Newsletter pill */}
             <MagneticButton strength={0.2}>
-              <Link href="/launchpad">
-                <div
-                  className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
-                    location === "/launchpad"
-                      ? "bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white shadow-sm"
-                      : "text-muted-foreground hover:text-foreground hover:bg-[oklch(0.97_0.005_230)]"
-                  }`}
-                >
-                  <Rocket className="w-3.5 h-3.5" />
-                  Launchpad
-                </div>
-              </Link>
+              <button
+                onClick={() => setNewsletterOpen(true)}
+                className="ml-1 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white shadow-sm hover:opacity-90"
+              >
+                <Mail className="w-3.5 h-3.5" />
+                Get the brief
+              </button>
             </MagneticButton>
           </div>
         </motion.nav>
       </div>
+
+      {/* Newsletter modal */}
+      <AnimatePresence>
+        {newsletterOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setNewsletterOpen(false)}
+              className="fixed inset-0 z-50 bg-[oklch(0.15_0.01_260_/_30%)] backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+              className="fixed left-1/2 top-1/2 z-50 w-[min(560px,calc(100vw-2rem))] -translate-x-1/2 -translate-y-1/2 bg-white rounded-3xl elevation-3 p-8"
+            >
+              <div className="flex items-start justify-between mb-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] flex items-center justify-center">
+                    <Mail className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-semibold text-foreground">The 8 AM AI brief</h3>
+                    <p className="text-sm text-muted-foreground">3 tools, 2 stories, 1 take. Daily, in your inbox.</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setNewsletterOpen(false)}
+                  className="w-8 h-8 rounded-xl bg-[oklch(0.95_0.005_230)] hover:bg-[oklch(0.92_0.01_230)] flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+              <NewsletterSignup compact />
+              <p className="text-xs text-muted-foreground/70 mt-4">
+                Sent every weekday at 8 AM IST. Unsubscribe anytime in 1 click.
+              </p>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </motion.header>
   );
 }
