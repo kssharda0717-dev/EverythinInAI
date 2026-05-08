@@ -5,7 +5,7 @@
  * Falls back to mock data if the API is unavailable.
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import StatsBar from "@/components/StatsBar";
@@ -13,6 +13,7 @@ import FeaturedCarousel from "@/components/FeaturedCarousel";
 import DiscoveryGrid from "@/components/DiscoveryGrid";
 import SidePeekDrawer from "@/components/SidePeekDrawer";
 import Footer from "@/components/Footer";
+import ChatBot from "@/components/ChatBot";
 import { useTools, useStats } from "@/hooks/useTools";
 import type { AITool } from "@/lib/data";
 
@@ -38,6 +39,17 @@ export default function Home() {
     },
     [search]
   );
+
+  // Reset search/filter when logo is clicked
+  useEffect(() => {
+    const handler = () => {
+      search('');                  // clear search
+      setDrawerOpen(false);
+      setDrawerTool(null);
+    };
+    window.addEventListener('reset-home-filters', handler);
+    return () => window.removeEventListener('reset-home-filters', handler);
+  }, [search]);
 
   const handleFeaturedClick = useCallback((tool: AITool) => {
     setDrawerTool(tool);
@@ -73,6 +85,9 @@ export default function Home() {
         isOpen={drawerOpen}
         onClose={() => setDrawerOpen(false)}
       />
+
+      {/* AI assistant chatbot — floating bottom-right */}
+      <ChatBot />
     </div>
   );
 }

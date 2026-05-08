@@ -5,10 +5,16 @@
 
 import { Sparkles, Github } from "lucide-react";
 import { Link } from "wouter";
+import NewsletterSignup from "./NewsletterSignup";
 
 export default function Footer() {
   return (
     <footer className="relative mt-12">
+      {/* Newsletter section */}
+      <div className="max-w-[1400px] mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12">
+        <NewsletterSignup />
+      </div>
+
       {/* Ice fracture divider */}
       <div className="h-px bg-gradient-to-r from-transparent via-[oklch(0.88_0.03_230)] to-transparent" />
 

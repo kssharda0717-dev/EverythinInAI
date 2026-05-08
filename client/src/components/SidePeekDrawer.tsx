@@ -5,9 +5,9 @@
  */
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, ArrowUpRight, Globe, Tag, Clock } from "lucide-react";
+import { X, ExternalLink, ArrowUpRight, Globe, Tag, DollarSign, Github } from "lucide-react";
 import type { AITool } from "@/lib/data";
-import { CATEGORY_BADGE_MAP, formatTimeAgo } from "@/lib/data";
+import { CATEGORY_BADGE_MAP } from "@/lib/data";
 
 interface SidePeekDrawerProps {
   tool: AITool | null;
@@ -100,12 +100,28 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   </div>
                   <div className="glass rounded-xl p-4">
                     <div className="flex items-center gap-2 mb-1">
-                      <Clock className="w-3.5 h-3.5 text-[oklch(0.55_0.18_230)]" />
-                      <span className="text-functional text-muted-foreground">Discovered</span>
+                      <DollarSign className="w-3.5 h-3.5 text-[oklch(0.55_0.18_230)]" />
+                      <span className="text-functional text-muted-foreground">Pricing</span>
                     </div>
-                    <p className="text-lg font-semibold text-foreground">{formatTimeAgo(tool.publishedAt)}</p>
+                    <p className="text-lg font-semibold text-foreground capitalize">
+                      {tool.pricing === "open_source" ? "Open Source" : tool.pricing}
+                    </p>
                   </div>
                 </div>
+
+                {/* Secondary source link (GitHub etc.) shown only if different from primary */}
+                {tool.sourceUrl && (
+                  <a
+                    href={tool.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mb-6"
+                  >
+                    <Github className="w-3.5 h-3.5" />
+                    View source on {tool.sourceUrl.includes('github') ? 'GitHub' : 'source'}
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                )}
 
                 {/* Tags */}
                 {tool.tags.length > 0 && (
@@ -127,14 +143,10 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   </div>
                 )}
 
-                {/* Source + Pricing */}
-                <div className="flex items-center gap-3">
+                {/* Discovery source attribution (small footnote) */}
+                <div className="flex items-center gap-3 pt-4 border-t border-[oklch(0.92_0.01_230)/_0.5]">
                   <span className="text-functional text-muted-foreground/60">
-                    Source: {tool.source.replace("_", " ")}
-                  </span>
-                  <span className="text-muted-foreground/30">|</span>
-                  <span className="text-functional text-muted-foreground/60 capitalize">
-                    {tool.pricing === "open_source" ? "open source" : tool.pricing}
+                    Discovered via {tool.source.replace(/_/g, ' ')}
                   </span>
                 </div>
               </div>

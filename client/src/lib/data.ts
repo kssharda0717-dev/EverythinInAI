@@ -11,7 +11,8 @@ export interface AITool {
   name: string;
   tagline: string;
   description: string;
-  url: string;
+  url: string;                            // primary CTA target (homepage if available)
+  sourceUrl?: string | null;              // secondary source URL (GitHub, etc.) for power-users
   category: string;
   source: string;
   upvotes: number;

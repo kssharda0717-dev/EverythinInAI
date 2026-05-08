@@ -28,13 +28,15 @@ const log = createLogger('hero_worker');
 
 // Wardrobe options — pick ONE per Reel, lock it for all subsequent renders.
 // Each option is a complete outfit string used in the prompt.
+// NO NECKLACES — the LoRA tends to merge necklaces into skin/clothing, looking weird.
+// Just the outfit + ear accents only.
 const OUTFITS = {
-  cream_knit:   'fitted cream ribbed knit turtleneck, modest high crew neck, layered delicate matte gold pendant necklace',
-  forest_green: 'fitted forest green ribbed knit turtleneck, modest high crew neck, simple gold stud earrings',
-  beige_blazer: 'tailored beige blazer over high-neck cream silk top, layered delicate gold pendants, professional polished look',
-  ivory_silk:   'fitted ivory silk blouse buttoned to high neck, single delicate gold pendant',
-  oversized_cardigan: 'oversized cream knit cardigan over fitted cream high-neck top, simple gold hoops',
-  black_mock:   'fitted black mock-neck merino top, single small gold pendant, minimalist',
+  cream_knit:   'fitted cream ribbed knit turtleneck, modest high crew neck, no necklace, simple small gold stud earrings',
+  forest_green: 'fitted forest green ribbed knit turtleneck, modest high crew neck, no necklace, no jewelry',
+  beige_blazer: 'tailored beige blazer over high-neck cream silk top, no necklace, simple small gold stud earrings, professional polished look',
+  ivory_silk:   'fitted ivory silk blouse buttoned to high neck, no necklace, no jewelry, clean minimalist',
+  oversized_cardigan: 'oversized cream knit cardigan over fitted cream high-neck top, no necklace, simple small gold hoop earrings',
+  black_mock:   'fitted black mock-neck merino top, no necklace, no jewelry, minimalist',
 };
 
 function parseArgs(argv) {

@@ -114,6 +114,11 @@ function buildBouncyAss(cues, totalSeconds, opts = {}) {
   const W = opts.width || 1080;
   const H = opts.height || 1350;
 
+  // Three styles:
+  //   Default     — word-by-word captions
+  //   Highlight   — emphasis words in yellow
+  //   Watermark   — small "@avi.in.ai" in top-right, persistent through the whole Reel
+  //   Outro       — large "EVERYTHININAI.COM" at bottom-center for last 2.5s
   const header = `[Script Info]
 ScriptType: v4.00+
 PlayResX: ${W}
@@ -125,6 +130,8 @@ ScaledBorderAndShadow: yes
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,Montserrat,110,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
 Style: Highlight,Montserrat,110,&H0000FFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
+Style: Watermark,Montserrat,32,&HB0FFFFFF,&H000000FF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,2,2,9,30,30,30,1
+Style: Outro,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,6,3,2,80,80,180,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -132,18 +139,24 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
   const HIGHLIGHT_WORDS = /^(WILD|UNHINGED|CRAZY|HUGE|MASSIVE|HONESTLY|LITERALLY|YAAR|MATLAB|OKAY)$/i;
 
-  const events = cues.map(c => {
+  const wordEvents = cues.map(c => {
     const start = assTime2(c.start);
     const end = assTime2(c.end);
     const isHighlight = HIGHLIGHT_WORDS.test(c.text.replace(/[^a-z]/gi, ''));
     const style = isHighlight ? 'Highlight' : 'Default';
-    // Scale-bounce: pop in 1.4× → settle to 1× over 150ms
-    // Plus quick fade in/out (60/60 ms)
     const text = `{\\fad(60,60)\\fscx140\\fscy140\\t(0,150,\\fscx100\\fscy100)}${c.text}`;
     return `Dialogue: 0,${start},${end},${style},,0,0,0,,${text}`;
-  }).join('\n');
+  });
 
-  return header + events;
+  // Persistent watermark in top-right corner across the entire Reel
+  const watermark = `Dialogue: 0,${assTime2(0)},${assTime2(totalSeconds)},Watermark,,0,0,0,,@avi.in.ai`;
+
+  // Outro brand line: appears in the last 2.5 seconds with a fade in/out
+  const outroStart = Math.max(0, totalSeconds - 2.5);
+  const outroEnd = totalSeconds;
+  const outro = `Dialogue: 0,${assTime2(outroStart)},${assTime2(outroEnd)},Outro,,0,0,0,,{\\fad(300,200)\\an2}EVERYTHININAI.COM`;
+
+  return header + [...wordEvents, watermark, outro].join('\n');
 }
 
 function assTime2(seconds) {

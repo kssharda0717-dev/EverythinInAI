@@ -10,7 +10,20 @@ import { Link, useLocation } from "wouter";
 import MagneticButton from "./MagneticButton";
 
 export default function Navbar() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+
+  // Logo click — if already on home, force a full reset (scroll top + reload state).
+  // This ensures any in-page search filter clears even when wouter doesn't unmount the page.
+  const handleLogoClick = (e: React.MouseEvent) => {
+    if (location === '/') {
+      e.preventDefault();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      // Soft reset: dispatch a custom event Home listens for
+      window.dispatchEvent(new CustomEvent('reset-home-filters'));
+    } else {
+      setLocation('/');
+    }
+  };
   const { scrollY } = useScroll();
   const bgOpacity = useTransform(scrollY, [0, 100], [0.65, 0.9]);
   const shadowOpacity = useTransform(scrollY, [0, 100], [0, 0.08]);
@@ -31,7 +44,7 @@ export default function Navbar() {
           className="backdrop-blur-xl backdrop-saturate-150 rounded-2xl px-6 py-3 flex items-center justify-between"
         >
           {/* Logo */}
-          <Link href="/">
+          <a href="/" onClick={handleLogoClick} className="cursor-pointer">
             <div className="flex items-center gap-2.5 group">
               <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[oklch(0.75_0.12_230)] to-[oklch(0.82_0.12_185)] flex items-center justify-center shadow-sm">
                 <Sparkles className="w-4 h-4 text-white" />
@@ -40,7 +53,7 @@ export default function Navbar() {
                 Everythin<span className="text-[oklch(0.55_0.18_230)]">InAI</span>
               </span>
             </div>
-          </Link>
+          </a>
 
           {/* Nav Links */}
           <div className="flex items-center gap-1">

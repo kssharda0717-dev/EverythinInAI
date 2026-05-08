@@ -23,14 +23,23 @@ import {
 
 const PAGE_SIZE = 24;
 
-// Map a Supabase row to the frontend AITool shape
+// Map a Supabase row to the frontend AITool shape.
+// IMPORTANT: prefer the actual product homepage over the GitHub URL whenever
+// possible — the GitHub link is kept as a secondary `sourceUrl`.
 function mapBackendTool(tool: any): AITool {
+  // If `homepage` is set and not the same as `url`, treat homepage as the
+  // "Visit" target and `url` as the source link. Otherwise fall back to `url`.
+  const homepageRaw = (tool.homepage || '').trim();
+  const urlRaw = (tool.url || '').trim();
+  const visitUrl = homepageRaw || urlRaw;
+
   return {
     id: tool.slug || tool.id,
     name: tool.name,
     tagline: tool.tagline || '',
     description: tool.description || '',
-    url: tool.url,
+    url: visitUrl,                                       // primary CTA target
+    sourceUrl: homepageRaw && homepageRaw !== urlRaw ? urlRaw : null,  // secondary (GitHub etc.)
     category: tool.category || 'Other',
     tags: tool.tags || [],
     pricing: tool.pricing || 'unknown',

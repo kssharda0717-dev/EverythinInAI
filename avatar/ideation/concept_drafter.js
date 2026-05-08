@@ -84,7 +84,20 @@ REQUIREMENTS:
 
 3. Each concept must be DIFFERENT in tone — not just rewording.
 
-4. STRICTLY follow Avi's voice rules from the system prompt above. No banned phrases.
+5. STRICTLY follow Avi's voice rules from the system prompt above. No banned phrases.
+
+6. CRITICAL CTA RULES — the punchline AND the caption MUST end with one of these DM-funnel CTAs (pick the most natural):
+   - "Comment LINK and I'll DM you the repo"
+   - "Comment GUIDE and I'll DM you the breakdown"
+   - "Comment AVI and I'll DM you my notes on this"
+   - "Comment YES and I'll DM you the demo"
+   The CTA MUST direct viewers to comment a specific keyword to get a DM. NEVER use:
+   - "What do you think" / "Let me know" / "Drop your thoughts"
+   - "Like for more" / "Follow for more" / "Subscribe"
+   - "Link in bio"
+   The keyword MUST be a single uppercase word, easy to type in the comment.
+
+7. Caption MUST END with: "— everythinginai.com" on its own line.
 
 5. Return ONLY valid JSON. No markdown fences. No prose outside the JSON.
 

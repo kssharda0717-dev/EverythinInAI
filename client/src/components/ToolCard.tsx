@@ -7,7 +7,7 @@
 import { motion } from "framer-motion";
 import { ExternalLink, ArrowUpRight, Star } from "lucide-react";
 import type { AITool } from "@/lib/data";
-import { CATEGORY_BADGE_MAP, formatTimeAgo } from "@/lib/data";
+import { CATEGORY_BADGE_MAP } from "@/lib/data";
 
 interface ToolCardProps {
   tool: AITool;
@@ -77,10 +77,6 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
           <span className="text-functional text-muted-foreground flex items-center gap-1">
             <ArrowUpRight className="w-3 h-3" />
             {tool.upvotes.toLocaleString()}
-          </span>
-          {/* Time */}
-          <span className="text-functional text-muted-foreground/60">
-            {formatTimeAgo(tool.publishedAt)}
           </span>
         </div>
 
