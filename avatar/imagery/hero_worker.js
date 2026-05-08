@@ -78,18 +78,20 @@ function pickOutfit(forceKey, conceptId) {
 }
 
 function buildHeroPrompt(persona, outfitDescriptor, trigger) {
-  // Optimized for SadTalker:
-  //   - Front-facing, eye-level
-  //   - Mouth slightly relaxed/neutral (closed or barely open)
-  //   - Clear face, no hand on face
+  // Optimized for OmniHuman/talking-head video generation:
+  //   - Front-facing, eye-level, head + upper body in frame
+  //   - Mouth slightly relaxed/neutral (will be animated)
+  //   - Hands visible and natural (so model can animate them with gestures)
+  //   - Clean, simple, slightly out-of-focus background (less artifact risk)
   return [
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator, looking directly at the camera, eye-level shot.`,
-    `Mouth slightly relaxed and closed, neutral expression with a soft barely-there smile, eyes warm and engaging.`,
-    `Sitting upright at her desk in a minimalist Bandra studio apartment, head and shoulders visible, hands resting calmly out of frame.`,
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
+    `Three-quarter body framing showing head, shoulders, and upper torso including hands resting naturally in her lap or gently on the desk in front of her, palms relaxed and visible.`,
+    `Looking directly at the camera, eye-level shot, mouth slightly relaxed and closed with the barest hint of a soft smile, warm engaging eyes.`,
+    `Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language.`,
     `Wearing ${outfitDescriptor}.`,
-    `Background: soft warm out-of-focus apartment with plants and bookshelf in deep bokeh, matte black laptop barely visible at the bottom edge.`,
-    `Lighting: soft warm window light from camera-left, gentle three-quarter key with soft fill, subtle warm ambient.`,
-    `Photographic style: editorial portrait, shot on Sony A7R IV with 85mm prime at f/1.8, shallow depth of field, photorealistic ultra-detailed natural skin texture with visible pores, subtle 35mm film grain, magazine-quality, Vogue India aesthetic, NOT illustration, NOT cartoon, NOT cgi.`,
+    `Background: clean simple out-of-focus warm-toned interior, soft plain wall with subtle warm gradient, no busy details, gentle bokeh, matte black laptop on the desk just barely visible at the edge of the frame.`,
+    `Lighting: soft, even, three-point editorial lighting with a warm key from camera-left and a gentle fill from camera-right, NO harsh shadows on the face, NO dramatic backlight.`,
+    `Photographic style: editorial portrait, shot on Sony A7R IV with 50mm prime at f/2.8, moderate depth of field, photorealistic ultra-detailed natural skin texture with visible pores, subtle 35mm film grain, magazine-quality, Vogue India aesthetic, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
   ].join(' ');
 }
 

@@ -69,22 +69,22 @@ async function rehostVideo(sourceUrl, destPath) {
 }
 
 /**
- * Run SadTalker.
- * @returns {Promise<string>} URL of the rehosted talking-head MP4
+ * Run ByteDance OmniHuman.
+ *   - Input:  hero image URL + voice WAV URL
+ *   - Output: talking-head/body MP4 with natural movement
+ * @returns {Promise<string>} URL of the rehosted MP4
  */
 async function generateTalkingHead({ heroImageUrl, voiceUrl, conceptId }) {
-  log.info(`Sending to SadTalker (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
+  log.info(`Sending to OmniHuman (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
+  log.info(`(Expect ~3-5 min on H100 GPU — do not interrupt)`);
 
-  const result = await runModel('sadtalker', {
-    source_image: heroImageUrl,
-    driven_audio: voiceUrl,
-    preprocess: 'full',           // 'full' = full upper-body crop (best for our 4:5 portraits)
-    still: false,                  // false = allow head movement; true = static head
-    enhancer: 'gfpgan',            // GFPGAN face enhancement (sharper, more photoreal)
-  }, { timeoutMs: 600_000 });    // up to 10 min for long audio
+  const result = await runModel('omni_human', {
+    image: heroImageUrl,
+    audio: voiceUrl,
+  }, { timeoutMs: 900_000 });    // up to 15 min for long audio
 
   const remoteUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-  log.info(`SadTalker returned: ${remoteUrl}`);
+  log.info(`OmniHuman returned: ${remoteUrl}`);
   log.info(`Cost: ~$${result.cost_usd}, time: ${(result.generation_ms / 1000).toFixed(1)}s`);
 
   // Rehost to Supabase

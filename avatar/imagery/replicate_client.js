@@ -33,7 +33,10 @@ const MODELS = {
   // Word-level transcription (for animated captions)
   whisper_fast:  { id: 'vaibhavs10/incredibly-fast-whisper', version: '3ab86df6c8f54c11309d4d1f930ac292bad43ace52d10c80d87eb258b3c9f79c', cost_per_image: 0.01 },
   // Lip-sync: turn one Avi portrait + voice WAV into a talking-head video
+  // (legacy, looks robotic)
   sadtalker:    { id: 'lucataco/sadtalker',    version: '85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b', cost_per_image: 0.10 },
+  // ByteDance OmniHuman — STATE-OF-THE-ART. Natural body/hands/background.
+  omni_human:   { id: 'bytedance/omni-human',  version: '566f1b03016969ac39e242c1ae4a39034686ca8850fc3dba83dceaceb96f74b2', cost_per_image: 0.50 },
 };
 
 // LoRA trainer — used once to create Avi's identity LoRA. Cost: ~$2-3 flat.
