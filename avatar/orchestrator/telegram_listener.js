@@ -42,13 +42,24 @@ let lastUpdateId = 0;
 
 async function reply(chatId, text) {
   try {
+    // Try Markdown first, fall back to plain text on 400 (Markdown parse errors)
     await axios.post(`${API}/sendMessage`, {
       chat_id: chatId,
       text,
       parse_mode: 'Markdown',
     }, { timeout: 10_000 });
   } catch (err) {
-    log.warn(`reply failed: ${err.message}`);
+    log.warn(`Markdown reply failed (${err.message}); retrying as plain text`);
+    try {
+      // Strip markdown markers and retry
+      const plain = text.replace(/[*_`]/g, '');
+      await axios.post(`${API}/sendMessage`, {
+        chat_id: chatId,
+        text: plain,
+      }, { timeout: 10_000 });
+    } catch (err2) {
+      log.warn(`Plain text reply also failed: ${err2.message}`);
+    }
   }
 }
 
