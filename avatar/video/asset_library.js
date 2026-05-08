@@ -20,16 +20,15 @@ const ASSET_DIR = path.join(__dirname, 'assets');
 // Curated CC0 / Pixabay-licensed audio.  Each URL serves a permanent file.
 // (If any URL 404s, we fall back to a silent placeholder.)
 const MUSIC_TRACKS = [
-  // Calm cinematic / lofi — good for tech reviews
-  { name: 'lofi_warm_keys.mp3',     url: 'https://cdn.pixabay.com/audio/2024/02/05/audio_1cf45e75d6.mp3', mood: 'calm' },
-  { name: 'minimal_corporate.mp3',  url: 'https://cdn.pixabay.com/audio/2023/06/07/audio_5b8f0e7b1f.mp3', mood: 'corporate' },
-  { name: 'soft_intro.mp3',         url: 'https://cdn.pixabay.com/audio/2023/03/10/audio_2c8ff09e08.mp3', mood: 'inspiring' },
+  { name: 'lofi_warm.mp3',     url: 'https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3', mood: 'calm' },
+  { name: 'minimal_corp.mp3',  url: 'https://assets.mixkit.co/music/preview/mixkit-tech-corporate-1681.mp3', mood: 'corporate' },
+  { name: 'soft_intro.mp3',    url: 'https://assets.mixkit.co/music/preview/mixkit-driving-ambition-32.mp3', mood: 'inspiring' },
 ];
 
 const SFX = [
-  { name: 'whoosh.mp3', url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_9e9b3f8d6f.mp3', purpose: 'cut_transition' },
-  { name: 'tick.mp3',   url: 'https://cdn.pixabay.com/audio/2022/03/15/audio_5a3a8a8d44.mp3', purpose: 'callout' },
-  { name: 'pop.mp3',    url: 'https://cdn.pixabay.com/audio/2022/03/10/audio_2cae5c7eb3.mp3', purpose: 'punch' },
+  { name: 'whoosh.mp3', url: 'https://assets.mixkit.co/active_storage/sfx/2429/2429-preview.mp3', purpose: 'cut_transition' },
+  { name: 'tick.mp3',   url: 'https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3', purpose: 'callout' },
+  { name: 'pop.mp3',    url: 'https://assets.mixkit.co/active_storage/sfx/2430/2430-preview.mp3', purpose: 'punch' },
 ];
 
 async function downloadIfMissing(asset) {
