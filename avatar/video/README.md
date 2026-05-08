@@ -1,29 +1,37 @@
-# Avi — Video Layer (Phase 11)
+# Avi — Video Layer (Phase 11 v2: talking-head)
 
-Final assembly: keyframes + voice + word-level captions → 1080×1350 MP4 Reel.
+Final Reel = lip-synced talking head + word-level captions, 1080×1350 MP4.
 
 ## Files
 
 | File | Purpose |
 |---|---|
-| `caption_generator.js` | Whisper word-level → SRT/ASS cues |
-| `video_assembler.js` | ffmpeg Ken-Burns + xfade + caption burn |
-| `video_worker.js` | Orchestrator: pulls concept → renders MP4 → uploads |
+| `caption_generator.js` | Whisper word-level → ASS cues |
+| `lipsync_worker.js` | Hero keyframe + voice WAV → SadTalker → talking-head MP4 |
+| `video_assembler.js` | (legacy slideshow assembler, kept for reference) |
+| `video_worker.js` | Burns captions onto talking-head + scales to 1080x1350 |
 
-## Pipeline (3 commands per Reel)
+## Pipeline (4 commands per Reel)
 
 ```bash
-# 1. Render the 4 photoreal Avi keyframes (~$0.10, ~3 min)
-node avatar/imagery/image_worker.js --winner
+# 1. Render ONE photoreal Avi hero keyframe (~$0.025, ~30s)
+node avatar/imagery/hero_worker.js --winner
 
-# 2. Generate the voice track (~$0.03, ~30s)
+# 2. Generate voice track (~$0.03, ~30s)
 node avatar/voice/voice_worker.js --winner
 
-# 3. Stitch into a Reel (~$0.01, ~60s)
+# 3. Lip-sync the hero to the voice (~$0.10, ~60-90s)
+node avatar/video/lipsync_worker.js --winner
+
+# 4. Burn captions + final 1080x1350 (free, ~30s)
 node avatar/video/video_worker.js --winner
 ```
 
-End-to-end: ~4 min, ~$0.14/Reel.
+End-to-end: ~3 min, ~$0.17/Reel.
+
+The new design: ONE hero keyframe (front-facing, locked outfit), animated
+via SadTalker for lip-sync, with word-level TikTok-style captions burned in.
+No more slideshow chaos.
 
 ## Output spec
 
