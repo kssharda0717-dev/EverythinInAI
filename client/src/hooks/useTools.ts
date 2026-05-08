@@ -167,7 +167,7 @@ export function useTools() {
         .select('*')
         .eq('is_active', true)
         .or(
-          `name.ilike.${term},display_name.ilike.${term},tagline.ilike.${term},category.ilike.${term},description.ilike.${term},search_aliases.cs.{${query.toLowerCase()}}`
+          `name.ilike.${term},display_name.ilike.${term},tagline.ilike.${term},category.ilike.${term},description.ilike.${term}`
         )
         .order('upvotes', { ascending: false })
         .limit(50);
