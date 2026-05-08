@@ -158,7 +158,6 @@ async function main() {
       source: 'curated_seed',
       upvotes: 1000,                  // give them a high boost so they appear featured
       confidence: 0.95,
-      classifier_version: 'curated_v1',
       is_active: true,
       published_at: new Date().toISOString(),
     };
