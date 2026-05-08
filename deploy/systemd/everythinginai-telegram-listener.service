@@ -1,0 +1,18 @@
+[Unit]
+Description=EverythinInAI — Telegram Listener (long-poll bot for /pick + /go commands)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node avatar/orchestrator/telegram_listener.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/var/log/everythinginai-telegram.log
+StandardError=append:/var/log/everythinginai-telegram.log
+
+[Install]
+WantedBy=multi-user.target

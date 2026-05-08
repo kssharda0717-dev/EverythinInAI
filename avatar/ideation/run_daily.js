@@ -26,6 +26,7 @@ const personaService = require('../persona/persona_service');
 const { pickTopSignals } = require('./signal_picker');
 const { draftConcepts } = require('./concept_drafter');
 const { sendConcepts, sendStatus } = require('./telegram_notify');
+const { getContentTypeForDate, ensureTodaysCalendarRow } = require('../scheduler/weekly_planner');
 
 const log = createLogger('ideation');
 
@@ -57,7 +58,25 @@ async function main() {
 
   log.info(`════════════════════════════════════════════════════════════════`);
   log.info(`Daily ideation run for ${today}${args.dryRun ? ' (DRY RUN)' : ''}`);
-  log.info(`════════════════════════════════════════════════════════════════`);
+  log.info(`══════════════════════════════════════════════════════════════`);
+
+  // 0. Day-aware short-circuit: only fire on tech-reel days (Mon-Thu)
+  const { weekday, weekdayName, contentType } = getContentTypeForDate(new Date());
+  log.info(`Today is ${weekdayName} → scheduled content type: ${contentType}`);
+  if (contentType !== 'tech_reel') {
+    log.info(`Today (${weekdayName}) is not a tech-reel day. Ideation skipped.`);
+    if (!args.dryRun) {
+      // Still ensure today's calendar row exists for the lure/lifestyle workflow
+      try { await ensureTodaysCalendarRow(); } catch (e) { log.warn(`calendar ensure failed: ${e.message}`); }
+      try { await sendStatus(`ℹ️ Today is ${weekdayName} — ${contentType.replace('_', ' ')} day. Reply /go to fire it.`); } catch {}
+    }
+    return;
+  }
+
+  // Tech-reel day: ensure calendar row + run ideation
+  if (!args.dryRun) {
+    try { await ensureTodaysCalendarRow(); } catch (e) { log.warn(`calendar ensure failed: ${e.message}`); }
+  }
 
   // 1. Load persona
   const persona = await personaService.getActivePersona('avi');
@@ -139,16 +158,9 @@ async function main() {
     }
     log.info(`✓ Inserted ${conceptIds.length} concepts into reel_concepts`);
 
-    // 7. Mark Concept A as provisional winner (auto-pick fallback)
-    const { error: winnerErr } = await db
-      .from('reel_concepts')
-      .update({ is_winner: true, state: 'approved' })
-      .eq('id', conceptIds[0]);
-    if (winnerErr) {
-      log.error(`Failed to mark winner: ${winnerErr.message}`);
-    } else {
-      log.info(`✓ Concept A (${conceptIds[0]}) marked as provisional winner`);
-    }
+    // NOTE: Auto-pick is deliberately removed. The user MUST reply /pick_<id>
+    // in Telegram. If they don't, today's tech reel simply doesn't get rendered.
+    // This is intentional cost-control (no surprise renders).
   } else {
     log.info('DRY-RUN: skipping db writes');
     concepts.forEach((c, i) => conceptIds.push(`dry-${i}`));

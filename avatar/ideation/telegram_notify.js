@@ -42,7 +42,8 @@ function formatConceptsMessage(signal, concepts, conceptIds) {
     lines.push('');
   });
 
-  lines.push('Reply with /pick_<id> within 4 hours, or Concept A is auto-picked.');
+  lines.push('⚠️ You MUST reply /pick_<id> for one to render.');
+  lines.push('NO auto-pick — if you don\'t reply, today\'s tech reel does NOT get rendered (cost-control).');
   return lines.join('\n');
 }
 
