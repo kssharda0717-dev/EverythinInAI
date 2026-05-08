@@ -68,6 +68,19 @@ function planEngagement(cues, concept) {
       }
     }
   }
+  // 2. Mid-Reel B-roll: a SECOND screenshot near 60% of the way through,
+  //    using the same signal URL but at a different scroll/anchor point if possible.
+  if (concept.signal_url && totalDuration > 8) {
+    const at = totalDuration * 0.55;
+    plan.broll_cuts.push({
+      at_sec: at,
+      duration: 1.2,
+      source_url: concept.signal_url,
+      type: 'screenshot',
+    });
+    plan.sfx_events.push({ at_sec: at, type: 'cut_transition' });
+  }
+
 
   // 2. Stat callouts: detect numbers
   for (let i = 0; i < words.length; i++) {

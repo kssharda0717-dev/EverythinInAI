@@ -86,7 +86,7 @@ function buildHeroPrompt(persona, outfitDescriptor, trigger) {
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
     `Three-quarter body framing showing head, shoulders, and upper torso including hands resting naturally in her lap or gently on the desk in front of her, palms relaxed and visible.`,
-    `Looking directly at the camera, eye-level shot, mouth slightly relaxed and closed with the barest hint of a soft smile, warm engaging eyes.`,
+    `Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging eyes.`,
     `Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language.`,
     `Wearing ${outfitDescriptor}.`,
     `Background: clean simple out-of-focus warm-toned interior, soft plain wall with subtle warm gradient, no busy details, gentle bokeh, matte black laptop on the desk just barely visible at the edge of the frame.`,
