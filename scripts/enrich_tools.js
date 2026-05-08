@@ -132,15 +132,18 @@ async function main() {
     // 2) Description (skip if --only-homepage OR if description is already long)
     if (!args.onlyHomepage) {
       const currentDesc = (t.description || '').trim();
-      if (currentDesc.length < 150) {
+      if (currentDesc.length < 300) {        // bumped from 150 — 200-word target = ~1200 chars
         try {
           const desc = await generateDescription(t.name, t.tagline || '', t.category || 'Other', t.tags || []);
-          if (desc && desc.length >= 100) {
+          if (desc && desc.length >= 80) {
             update.description = desc.substring(0, 2000);
             descUpdated++;
+            log.info(`  desc ✓ ${t.slug} (${desc.length} chars)`);
+          } else {
+            log.warn(`  desc ⚠ ${t.slug} — Gemini returned only ${desc?.length || 0} chars`);
           }
         } catch (err) {
-          log.warn(`Gemini failed for ${t.slug}: ${err.message}`);
+          log.warn(`  desc ✗ ${t.slug}: ${err.message}`);
         }
       }
     }
