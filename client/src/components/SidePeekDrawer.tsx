@@ -11,8 +11,9 @@
  *   - Pricing + secondary GitHub link
  */
 
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, Globe, DollarSign, Github, CheckCircle2, XCircle, Sparkles, Target, Zap } from "lucide-react";
+import { X, ExternalLink, Globe, DollarSign, Github, CheckCircle2, XCircle, Sparkles, Target, Zap, Loader2 } from "lucide-react";
 import type { AITool } from "@/lib/data";
 import { CATEGORY_BADGE_MAP } from "@/lib/data";
 
@@ -50,11 +51,43 @@ function BulletList({ items, accent = 'default' }: { items: string[]; accent?: '
 }
 
 export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawerProps) {
-  if (!tool) return null;
+  // Lazy-fill: if the open tool is missing structured fields, fetch enrichment.
+  const [enrichedTool, setEnrichedTool] = useState<AITool | null>(tool);
+  const [isEnriching, setIsEnriching] = useState(false);
 
-  const badgeClass = CATEGORY_BADGE_MAP[tool.category] || "badge-other";
-  const displayName = tool.displayName || tool.name;
-  const hasStructured = (tool.useCases && tool.useCases.length > 0) || (tool.keyFeatures && tool.keyFeatures.length > 0);
+  useEffect(() => {
+    setEnrichedTool(tool);
+    if (!tool || !isOpen) return;
+    const isStructured = (tool.useCases && tool.useCases.length > 0) || (tool.keyFeatures && tool.keyFeatures.length > 0);
+    if (isStructured) return;
+    setIsEnriching(true);
+    fetch('/api/enrich-on-demand', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+                                                                                                                             if (data?.tool) {
+          // Merge enriched fields back into the displayed tool
+          setEnrichedTool({
+            ...tool,
+            displayName: data.tool.display_name || tool.displayName || tool.name,
+            description: data.tool.description || tool.description,
+            useCases: data.tool.use_cases || [],
+            keyFeatures: data.tool.key_features || [],
+            pros: data.tool.pros || [],
+            cons: data.tool.cons || [],
+            bestFor: data.tool.best_for || '',
+          });
+        }
+      })
+      .catch(() => { /* silent fail; user still sees tagline */ })
+      .finally(() => setIsEnriching(false));
+  }, [tool, isOpen]);
+
+  if (!tool) return null;
+  const t = enrichedTool || tool;
+
+  const badgeClass = CATEGORY_BADGE_MAP[t.category] || "badge-other";
+  const displayName = t.displayName || t.name;
+  const hasStructured = (t.useCases && t.useCases.length > 0) || (t.keyFeatures && t.keyFeatures.length > 0);
 
   return (
     <AnimatePresence>
@@ -81,8 +114,13 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
             <div className="h-full glass-strong rounded-l-3xl overflow-y-auto">
               {/* Header */}
               <div className="sticky top-0 z-10 glass-strong px-6 py-4 flex items-center justify-between rounded-tl-3xl">
+                {isEnriching && (
+                  <div className="absolute top-3 left-1/2 -transla                  <div className="absolute top-3 left-1/2 -transla                  <div classNaoader2 className="w-3 h-3 animate-spin" />
+                    Enriching with AI...
+                  </div>
+                )}
                 <span className={`inline-flex items-center px-3 py-1 rounded-lg text-[0.65rem] font-semibold tracking-wide uppercase ${badgeClass}`}>
-                  {tool.category}
+                  {t.category}
                 </span>
                 <button
                   onClick={onClose}
@@ -99,44 +137,44 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
 
                 {/* Tagline */}
                 <p className="text-base text-muted-foreground mb-6 leading-relaxed">
-                  {tool.tagline}
+                  {t.tagline}
                 </p>
 
                 {/* Visit button */}
                 <a
-                  href={tool.url}
+                  href={t.url}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white text-sm font-medium hover:opacity-90 transition-opacity mb-2"
                 >
                   <Globe className="w-4 h-4" />
-                  Visit {tool.name}
+                  Visit {t.name}
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
 
-                {tool.sourceUrl && (
+                {t.sourceUrl && (
                   <div className="mb-7">
                     <a
-                      href={tool.sourceUrl}
+                      href={t.sourceUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Github className="w-3.5 h-3.5" />
-                      View source on {tool.sourceUrl.includes('github') ? 'GitHub' : 'source'}
+                      View source on {t.sourceUrl.includes('github') ? 'GitHub' : 'source'}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
                 )}
 
                 {/* Best for one-liner */}
-                {tool.bestFor && (
+                {t.bestFor && (
                   <div className="mb-7 p-4 rounded-2xl bg-gradient-to-br from-[oklch(0.97_0.01_230)] to-[oklch(0.95_0.02_210)]">
                     <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
                       Best for
                     </div>
                     <p className="text-sm text-foreground/90 leading-relaxed">
-                      {tool.bestFor}
+                      {t.bestFor}
                     </p>
                   </div>
                 )}
@@ -147,11 +185,11 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {/* About */}
                 <Section icon={Sparkles} title={`About ${displayName}`}>
                   <div className="text-[15px] text-foreground/85 leading-[1.7] space-y-3">
-                    {(tool.description || tool.tagline || '')
+                    {(t.description || t.tagline || '')
                       .split(/\n+/)
                       .filter(p => p.trim().length > 0)
                       .map((para, i) => <p key={i}>{para}</p>)}
-                    {(!tool.description || tool.description.length < 50) && (
+                    {(!t.description || t.description.length < 50) && (
                       <p className="italic text-muted-foreground text-xs">
                         Detailed description coming soon — our AI is enriching this tool's profile.
                       </p>
@@ -160,38 +198,38 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 </Section>
 
                 {/* Use Cases */}
-                {tool.useCases && tool.useCases.length > 0 && (
+                {t.useCases && t.useCases.length > 0 && (
                   <Section icon={Target} title="Use Cases">
-                    <BulletList items={tool.useCases} accent="default" />
+                    <BulletList items={t.useCases} accent="default" />
                   </Section>
                 )}
 
                 {/* Key Features */}
-                {tool.keyFeatures && tool.keyFeatures.length > 0 && (
+                {t.keyFeatures && t.keyFeatures.length > 0 && (
                   <Section icon={Zap} title="Key Features">
-                    <BulletList items={tool.keyFeatures} accent="default" />
+                    <BulletList items={t.keyFeatures} accent="default" />
                   </Section>
                 )}
 
                 {/* Pros / Cons side by side */}
-                {((tool.pros && tool.pros.length > 0) || (tool.cons && tool.cons.length > 0)) && (
+                {((t.pros && t.pros.length > 0) || (t.cons && t.cons.length > 0)) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
-                    {tool.pros && tool.pros.length > 0 && (
+                    {t.pros && t.pros.length > 0 && (
                       <div className="p-4 rounded-2xl bg-green-50/50">
                         <div className="flex items-center gap-2 mb-3">
                           <CheckCircle2 className="w-4 h-4 text-green-600" />
                           <h3 className="text-xs font-semibold text-green-900 uppercase tracking-wider">Pros</h3>
                         </div>
-                        <BulletList items={tool.pros} accent="green" />
+                        <BulletList items={t.pros} accent="green" />
                       </div>
                     )}
-                    {tool.cons && tool.cons.length > 0 && (
+                    {t.cons && t.cons.length > 0 && (
                       <div className="p-4 rounded-2xl bg-red-50/40">
                         <div className="flex items-center gap-2 mb-3">
                           <XCircle className="w-4 h-4 text-red-500" />
                           <h3 className="text-xs font-semibold text-red-900 uppercase tracking-wider">Cons</h3>
                         </div>
-                        <BulletList items={tool.cons} accent="red" />
+                        <BulletList items={t.cons} accent="red" />
                       </div>
                     )}
                   </div>
@@ -204,18 +242,18 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                     <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold">Pricing</span>
                   </div>
                   <p className="text-base font-semibold text-foreground capitalize">
-                    {tool.pricing === "open_source" ? "Open Source" : tool.pricing}
+                    {t.pricing === "open_source" ? "Open Source" : t.pricing}
                   </p>
                 </div>
 
                 {/* Tags */}
-                {tool.tags.length > 0 && (
+                {t.tags.length > 0 && (
                   <div className="mb-6">
                     <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
                       Categories & Tags
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      {tool.tags.slice(0, 8).map((tag) => (
+                      {t.tags.slice(0, 8).map((tag) => (
                         <span
                           key={tag}
                           className="px-3 py-1.5 rounded-full text-xs font-medium bg-white text-foreground border border-[oklch(0.92_0.01_230)]"
@@ -230,7 +268,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {/* Discovery source attribution */}
                 <div className="flex items-center gap-3 pt-6 mt-2 border-t border-[oklch(0.92_0.01_230)/_0.5]">
                   <span className="text-[0.65rem] text-muted-foreground/60 uppercase tracking-wider">
-                    Discovered via {tool.source.replace(/_/g, ' ')}
+                    Discovered via {t.source.replace(/_/g, ' ')}
                   </span>
                 </div>
               </div>

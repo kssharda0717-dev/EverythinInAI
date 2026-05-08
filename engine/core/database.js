@@ -6,6 +6,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const { config } = require('./config');
 const { createLogger } = require('../utils/logger');
+const { enrichTool } = require('../utils/enricher');
 
 const log = createLogger('database');
 
@@ -312,6 +313,24 @@ async function insertTool(tool) {
     published_at: tool.published_at || new Date().toISOString(),
     run_id: tool.run_id || '',
   };
+
+  // Auto-enrich (Gemini) to populate use_cases / key_features / pros / cons / etc.
+  // Silent-fail on  tool still gets inserted even if enrich misses.error 
+  try {
+    const enrichment = await enrichTool({
+      name: record.name,
+      tagline: record.tagline,
+      category: record.category,
+      tags: record.tags,
+      url: record.url,
+      homepage: record.homepage,
+    });
+    if (enrichment) {
+      Object.assign(record, enrichment);
+    }
+  } catch (err) {
+    log.debug('Enrich failed (continuing): ' + err.message);
+  }
 
   const { data, error } = await db.from('tools').insert(record).select().single();
   if (error) {
