@@ -1,11 +1,18 @@
 /*
- * POLAR LUMINANCE — Side-Peek Drawer
- * Frosted glass drawer that slides from the right.
- * Shows full tool description, URL, tags, and metadata.
+ * EverythinInAI — Side-Peek Drawer (v2: structured sections)
+ *
+ * Tool detail drawer with:
+ *   - Friendly display name
+ *   - 200-word About
+ *   - Best for (one-line)
+ *   - Use cases (3-5 bullets)
+ *   - Key features (3-5 bullets)
+ *   - Pros / Cons (side by side)
+ *   - Pricing + secondary GitHub link
  */
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ExternalLink, ArrowUpRight, Globe, Tag, DollarSign, Github } from "lucide-react";
+import { X, ExternalLink, Globe, DollarSign, Github, CheckCircle2, XCircle, Sparkles, Target, Zap } from "lucide-react";
 import type { AITool } from "@/lib/data";
 import { CATEGORY_BADGE_MAP } from "@/lib/data";
 
@@ -15,10 +22,39 @@ interface SidePeekDrawerProps {
   onClose: () => void;
 }
 
+function Section({ icon: Icon, title, children }: { icon: any; title: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-7">
+      <div className="flex items-center gap-2 mb-3">
+        <Icon className="w-4 h-4 text-[oklch(0.55_0.18_230)]" />
+        <h3 className="text-xs font-semibold text-foreground uppercase tracking-wider">{title}</h3>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function BulletList({ items, accent = 'default' }: { items: string[]; accent?: 'default' | 'green' | 'red' }) {
+  if (!items || items.length === 0) return null;
+  const dotColor = accent === 'green' ? 'bg-green-500' : accent === 'red' ? 'bg-red-400' : 'bg-[oklch(0.55_0.18_230)]';
+  return (
+    <ul className="space-y-2">
+      {items.map((item, i) => (
+        <li key={i} className="flex items-start gap-2.5 text-sm text-foreground/85 leading-relaxed">
+          <span className={`mt-2 w-1.5 h-1.5 rounded-full ${dotColor} flex-shrink-0`} />
+          <span>{item}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawerProps) {
   if (!tool) return null;
 
   const badgeClass = CATEGORY_BADGE_MAP[tool.category] || "badge-other";
+  const displayName = tool.displayName || tool.name;
+  const hasStructured = (tool.useCases && tool.useCases.length > 0) || (tool.keyFeatures && tool.keyFeatures.length > 0);
 
   return (
     <AnimatePresence>
@@ -59,7 +95,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
               {/* Content */}
               <div className="px-6 py-6">
                 {/* Tool name */}
-                <h2 className="text-heading text-foreground mb-2">{tool.name}</h2>
+                <h2 className="text-2xl font-bold text-foreground mb-1.5 leading-tight">{displayName}</h2>
 
                 {/* Tagline */}
                 <p className="text-base text-muted-foreground mb-6 leading-relaxed">
@@ -71,19 +107,45 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   href={tool.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white text-sm font-medium hover:opacity-90 transition-opacity mb-8"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white text-sm font-medium hover:opacity-90 transition-opacity mb-2"
                 >
                   <Globe className="w-4 h-4" />
                   Visit {tool.name}
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
 
+                {tool.sourceUrl && (
+                  <div className="mb-7">
+                    <a
+                      href={tool.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      <Github className="w-3.5 h-3.5" />
+                      View source on {tool.sourceUrl.includes('github') ? 'GitHub' : 'source'}
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+
+                {/* Best for one-liner */}
+                {tool.bestFor && (
+                  <div className="mb-7 p-4 rounded-2xl bg-gradient-to-br from-[oklch(0.97_0.01_230)] to-[oklch(0.95_0.02_210)]">
+                    <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
+                      Best for
+                    </div>
+                    <p className="text-sm text-foreground/90 leading-relaxed">
+                      {tool.bestFor}
+                    </p>
+                  </div>
+                )}
+
                 {/* Divider */}
                 <div className="h-px bg-gradient-to-r from-transparent via-[oklch(0.90_0.01_230)] to-transparent mb-6" />
 
-                {/* About — long-form 200-word description */}
-                <div className="mb-8">
-                  <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">About {tool.name}</h3>
+                {/* About */}
+                <Section icon={Sparkles} title={`About ${displayName}`}>
                   <div className="text-[15px] text-foreground/85 leading-[1.7] space-y-3">
                     {(tool.description || tool.tagline || '')
                       .split(/\n+/)
@@ -95,17 +157,68 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                       </p>
                     )}
                   </div>
+                </Section>
+
+                {/* Use Cases */}
+                {tool.useCases && tool.useCases.length > 0 && (
+                  <Section icon={Target} title="Use Cases">
+                    <BulletList items={tool.useCases} accent="default" />
+                  </Section>
+                )}
+
+                {/* Key Features */}
+                {tool.keyFeatures && tool.keyFeatures.length > 0 && (
+                  <Section icon={Zap} title="Key Features">
+                    <BulletList items={tool.keyFeatures} accent="default" />
+                  </Section>
+                )}
+
+                {/* Pros / Cons side by side */}
+                {((tool.pros && tool.pros.length > 0) || (tool.cons && tool.cons.length > 0)) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-7">
+                    {tool.pros && tool.pros.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-green-50/50">
+                        <div className="flex items-center gap-2 mb-3">
+                          <CheckCircle2 className="w-4 h-4 text-green-600" />
+                          <h3 className="text-xs font-semibold text-green-900 uppercase tracking-wider">Pros</h3>
+                        </div>
+                        <BulletList items={tool.pros} accent="green" />
+                      </div>
+                    )}
+                    {tool.cons && tool.cons.length > 0 && (
+                      <div className="p-4 rounded-2xl bg-red-50/40">
+                        <div className="flex items-center gap-2 mb-3">
+                          <XCircle className="w-4 h-4 text-red-500" />
+                          <h3 className="text-xs font-semibold text-red-900 uppercase tracking-wider">Cons</h3>
+                        </div>
+                        <BulletList items={tool.cons} accent="red" />
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Pricing tile */}
+                <div className="p-4 rounded-2xl bg-[oklch(0.97_0.005_230)] mb-6">
+                  <div className="flex items-center gap-2 mb-1">
+                    <DollarSign className="w-4 h-4 text-[oklch(0.55_0.18_230)]" />
+                    <span className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold">Pricing</span>
+                  </div>
+                  <p className="text-base font-semibold text-foreground capitalize">
+                    {tool.pricing === "open_source" ? "Open Source" : tool.pricing}
+                  </p>
                 </div>
 
-                {/* Who it's for / Best for */}
+                {/* Tags */}
                 {tool.tags.length > 0 && (
-                  <div className="mb-8">
-                    <h3 className="text-sm font-semibold text-foreground mb-3 uppercase tracking-wide">Best For</h3>
+                  <div className="mb-6">
+                    <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
+                      Categories & Tags
+                    </div>
                     <div className="flex flex-wrap gap-2">
-                      {tool.tags.slice(0, 6).map((tag) => (
+                      {tool.tags.slice(0, 8).map((tag) => (
                         <span
                           key={tag}
-                          className="px-3 py-1.5 rounded-full text-xs font-medium bg-gradient-to-br from-[oklch(0.97_0.01_230)] to-[oklch(0.95_0.02_210)] text-foreground border border-[oklch(0.92_0.01_230)]"
+                          className="px-3 py-1.5 rounded-full text-xs font-medium bg-white text-foreground border border-[oklch(0.92_0.01_230)]"
                         >
                           {tag}
                         </span>
@@ -114,42 +227,8 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   </div>
                 )}
 
-                {/* Metadata grid */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  <div className="glass rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <ArrowUpRight className="w-3.5 h-3.5 text-[oklch(0.55_0.18_230)]" />
-                      <span className="text-functional text-muted-foreground">Upvotes</span>
-                    </div>
-                    <p className="text-lg font-semibold text-foreground">{tool.upvotes.toLocaleString()}</p>
-                  </div>
-                  <div className="glass rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-3.5 h-3.5 text-[oklch(0.55_0.18_230)]" />
-                      <span className="text-functional text-muted-foreground">Pricing</span>
-                    </div>
-                    <p className="text-lg font-semibold text-foreground capitalize">
-                      {tool.pricing === "open_source" ? "Open Source" : tool.pricing}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Secondary source link (GitHub etc.) shown only if different from primary */}
-                {tool.sourceUrl && (
-                  <a
-                    href={tool.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors mb-6"
-                  >
-                    <Github className="w-3.5 h-3.5" />
-                    View source on {tool.sourceUrl.includes('github') ? 'GitHub' : 'source'}
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
-
-                {/* Discovery source attribution (small footnote) */}
-                <div className="flex items-center gap-3 pt-6 mt-6 border-t border-[oklch(0.92_0.01_230)/_0.5]">
+                {/* Discovery source attribution */}
+                <div className="flex items-center gap-3 pt-6 mt-2 border-t border-[oklch(0.92_0.01_230)/_0.5]">
                   <span className="text-[0.65rem] text-muted-foreground/60 uppercase tracking-wider">
                     Discovered via {tool.source.replace(/_/g, ' ')}
                   </span>

@@ -8,7 +8,8 @@
 
 export interface AITool {
   id: string;
-  name: string;
+  name: string;                           // technical name from DB (kept for breadcrumbs)
+  displayName?: string;                   // friendly name with parenthetical, falls back to `name`
   tagline: string;
   description: string;
   url: string;                            // primary CTA target (homepage if available)
@@ -20,6 +21,13 @@ export interface AITool {
   tags: string[];
   publishedAt: string;
   featured?: boolean;
+  // Structured enrichment (optional)
+  useCases?: string[];
+  keyFeatures?: string[];
+  pros?: string[];
+  cons?: string[];
+  bestFor?: string;
+  searchAliases?: string[];
 }
 
 export const CATEGORIES = [

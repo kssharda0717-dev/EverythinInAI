@@ -60,9 +60,9 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
         </span>
       </div>
 
-      {/* Tool name */}
+      {/* Tool name (friendly display name with fallback) */}
       <h3 className="text-lg font-semibold text-foreground mb-1.5 group-hover:text-[oklch(0.45_0.15_230)] transition-colors">
-        {tool.name}
+        {tool.displayName || tool.name}
       </h3>
 
       {/* Tagline */}

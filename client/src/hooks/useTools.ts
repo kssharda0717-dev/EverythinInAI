@@ -36,6 +36,7 @@ function mapBackendTool(tool: any): AITool {
   return {
     id: tool.slug || tool.id,
     name: tool.name,
+    displayName: tool.display_name || tool.name,
     tagline: tool.tagline || '',
     description: tool.description || '',
     url: visitUrl,                                       // primary CTA target
@@ -47,6 +48,12 @@ function mapBackendTool(tool: any): AITool {
     upvotes: tool.upvotes || 0,
     publishedAt: tool.published_at || tool.added_at || new Date().toISOString(),
     featured: (tool.upvotes || 0) > 100 || (tool.confidence || 0) > 0.9,
+    useCases: tool.use_cases || [],
+    keyFeatures: tool.key_features || [],
+    pros: tool.pros || [],
+    cons: tool.cons || [],
+    bestFor: tool.best_for || '',
+    searchAliases: tool.search_aliases || [],
   };
 }
 
@@ -153,12 +160,14 @@ export function useTools() {
 
     try {
       const term = `%${query.replace(/[%_]/g, '\\$&')}%`;
+      // Search across name, display_name, tagline, description, category, AND search_aliases
+      // search_aliases is text[] so we use `contains` (cs) for an exact tag match plus ilike for partial
       const { data, error } = await supabase
         .from('tools')
         .select('*')
         .eq('is_active', true)
         .or(
-          `name.ilike.${term},tagline.ilike.${term},category.ilike.${term},description.ilike.${term}`
+          `name.ilike.${term},display_name.ilike.${term},tagline.ilike.${term},category.ilike.${term},description.ilike.${term},search_aliases.cs.{${query.toLowerCase()}}`
         )
         .order('upvotes', { ascending: false })
         .limit(50);
