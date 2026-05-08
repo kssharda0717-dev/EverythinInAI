@@ -84,7 +84,7 @@ function buildBrollOverlay(brollLocalPaths, brollEvents) {
     const next = `base${i + 1}`;
     // overlay only between [at_sec, at_sec+duration]
     filters.push(
-      `[${inputIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=cover,crop=${W}:${H}[bv${i}]`
+      `[${inputIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H}[bv${i}]`
     );
     filters.push(
       `[${prev}][bv${i}]overlay=enable='between(t,${ev.at_sec},${ev.at_sec + ev.duration})'[${next}]`
