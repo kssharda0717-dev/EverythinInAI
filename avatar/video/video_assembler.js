@@ -41,30 +41,15 @@ function runFfmpeg(args, label = 'ffmpeg') {
  * We use `if(between(t,a,b),...)` to vary scale only during punch windows.
  */
 function buildBaseFilter(plan, totalDuration) {
-  // Build a piecewise zoom expression using nested if(between(t,...)...)
-  // Default scale is 1.0. During each zoom_punch, scale rises to N then settles back.
-  let scaleExpr = '1.0';
-  for (const z of plan.zoom_punches) {
-    const dur = z.to_sec - z.from_sec;
-    const half = dur / 2;
-    // Zoom in over first half, hold/fade out second half
-    const expr = `if(between(t,${z.from_sec},${z.to_sec}),${z.scale}-${(z.scale - 1).toFixed(3)}*abs(2*(t-${z.from_sec})/${dur}-1),REPLACE)`;
-    scaleExpr = expr.replace('REPLACE', scaleExpr);
-  }
-
-  // Final filter: zoompan implements the dynamic scale. Then scale to 1080x1350.
-  // zoompan's `z` is the per-frame scale factor.
+  // Simplified: just letterbox + scale. Zoom punches removed (zoompan expression
+  // syntax was fragile across ffmpeg versions). We rely on OmniHuman's own
+  // natural movement + the bouncy captions for energy.
   const filter = [
-    // Background: blurred copy of self for letterboxing
     `[0:v]split=2[main][bg]`,
     `[bg]scale=${W}:${H}:force_original_aspect_ratio=increase,crop=${W}:${H},gblur=sigma=40[bg2]`,
-    // Main: scale to fit, then dynamic zoom
-    `[main]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg0]`,
-    `[fg0]scale=2*iw:2*ih,zoompan=z='${scaleExpr}':d=1:s=${W}x${H}:fps=${FPS}[fg]`,
-    // Composite
+    `[main]scale=${W}:${H}:force_original_aspect_ratio=decrease[fg]`,
     `[bg2][fg]overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2[v]`,
   ].join(';');
-
   return filter;
 }
 
