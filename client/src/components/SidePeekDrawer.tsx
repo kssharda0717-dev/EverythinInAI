@@ -1,5 +1,5 @@
 /*
- * EverythinInAI — Side-Peek Drawer (v2: structured sections)
+ * EverythinInAI — Side-Peek Drawer (v3: lazy-fill + structured sections)
  *
  * Tool detail drawer with:
  *   - Friendly display name
@@ -9,6 +9,9 @@
  *   - Key features (3-5 bullets)
  *   - Pros / Cons (side by side)
  *   - Pricing + secondary GitHub link
+ *
+ * Lazy-fill: if tool is missing structured fields, fetches /api/enrich-on-demand
+ * to populate them in real time before showing.
  */
 
 import { useState, useEffect } from "react";
@@ -35,9 +38,14 @@ function Section({ icon: Icon, title, children }: { icon: any; title: string; ch
   );
 }
 
-function BulletList({ items, accent = 'default' }: { items: string[]; accent?: 'default' | 'green' | 'red' }) {
+function BulletList({ items, accent = "default" }: { items: string[]; accent?: "default" | "green" | "red" }) {
   if (!items || items.length === 0) return null;
-  const dotColor = accent === 'green' ? 'bg-green-500' : accent === 'red' ? 'bg-red-400' : 'bg-[oklch(0.55_0.18_230)]';
+  const dotColor =
+    accent === "green"
+      ? "bg-green-500"
+      : accent === "red"
+        ? "bg-red-400"
+        : "bg-[oklch(0.55_0.18_230)]";
   return (
     <ul className="space-y-2">
       {items.map((item, i) => (
@@ -51,21 +59,26 @@ function BulletList({ items, accent = 'default' }: { items: string[]; accent?: '
 }
 
 export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawerProps) {
-  // Lazy-fill: if the open tool is missing structured fields, fetch enrichment.
   const [enrichedTool, setEnrichedTool] = useState<AITool | null>(tool);
   const [isEnriching, setIsEnriching] = useState(false);
 
   useEffect(() => {
     setEnrichedTool(tool);
     if (!tool || !isOpen) return;
-    const isStructured = (tool.useCases && tool.useCases.length > 0) || (tool.keyFeatures && tool.keyFeatures.length > 0);
+    const isStructured =
+      (tool.useCases && tool.useCases.length > 0) ||
+      (tool.keyFeatures && tool.keyFeatures.length > 0);
     if (isStructured) return;
+
     setIsEnriching(true);
-    fetch('/api/enrich-on-demand', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-                                                                                                                             if (data?.tool) {
-          // Merge enriched fields back into the displayed tool
+    fetch("/api/enrich-on-demand", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: tool.id }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data && data.tool) {
           setEnrichedTool({
             ...tool,
             displayName: data.tool.display_name || tool.displayName || tool.name,
@@ -74,11 +87,13 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
             keyFeatures: data.tool.key_features || [],
             pros: data.tool.pros || [],
             cons: data.tool.cons || [],
-            bestFor: data.tool.best_for || '',
+            bestFor: data.tool.best_for || "",
           });
         }
       })
-      .catch(() => { /* silent fail; user still sees tagline */ })
+      .catch(() => {
+        /* silent fail; user still sees tagline */
+      })
       .finally(() => setIsEnriching(false));
   }, [tool, isOpen]);
 
@@ -87,7 +102,6 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
 
   const badgeClass = CATEGORY_BADGE_MAP[t.category] || "badge-other";
   const displayName = t.displayName || t.name;
-  const hasStructured = (t.useCases && t.useCases.length > 0) || (t.keyFeatures && t.keyFeatures.length > 0);
 
   return (
     <AnimatePresence>
@@ -115,7 +129,8 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
               {/* Header */}
               <div className="sticky top-0 z-10 glass-strong px-6 py-4 flex items-center justify-between rounded-tl-3xl">
                 {isEnriching && (
-                  <div className="absolute top-3 left-1/2 -transla                  <div className="absolute top-3 left-1/2 -transla                  <div classNaoader2 className="w-3 h-3 animate-spin" />
+                  <div className="absolute top-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 text-[0.65rem] text-muted-foreground">
+                    <Loader2 className="w-3 h-3 animate-spin" />
                     Enriching with AI...
                   </div>
                 )}
@@ -161,7 +176,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                       className="inline-flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
                       <Github className="w-3.5 h-3.5" />
-                      View source on {t.sourceUrl.includes('github') ? 'GitHub' : 'source'}
+                      View source on {t.sourceUrl.includes("github") ? "GitHub" : "source"}
                       <ExternalLink className="w-3 h-3" />
                     </a>
                   </div>
@@ -173,9 +188,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                     <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-1">
                       Best for
                     </div>
-                    <p className="text-sm text-foreground/90 leading-relaxed">
-                      {t.bestFor}
-                    </p>
+                    <p className="text-sm text-foreground/90 leading-relaxed">{t.bestFor}</p>
                   </div>
                 )}
 
@@ -185,11 +198,13 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {/* About */}
                 <Section icon={Sparkles} title={`About ${displayName}`}>
                   <div className="text-[15px] text-foreground/85 leading-[1.7] space-y-3">
-                    {(t.description || t.tagline || '')
+                    {(t.description || t.tagline || "")
                       .split(/\n+/)
-                      .filter(p => p.trim().length > 0)
-                      .map((para, i) => <p key={i}>{para}</p>)}
-                    {(!t.description || t.description.length < 50) && (
+                      .filter((p) => p.trim().length > 0)
+                      .map((para, i) => (
+                        <p key={i}>{para}</p>
+                      ))}
+                    {(!t.description || t.description.length < 50) && !isEnriching && (
                       <p className="italic text-muted-foreground text-xs">
                         Detailed description coming soon — our AI is enriching this tool's profile.
                       </p>
@@ -250,7 +265,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {t.tags.length > 0 && (
                   <div className="mb-6">
                     <div className="text-[0.65rem] uppercase tracking-wider text-muted-foreground font-semibold mb-3">
-                      Categories & Tags
+                      Categories &amp; Tags
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {t.tags.slice(0, 8).map((tag) => (
@@ -268,7 +283,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                 {/* Discovery source attribution */}
                 <div className="flex items-center gap-3 pt-6 mt-2 border-t border-[oklch(0.92_0.01_230)/_0.5]">
                   <span className="text-[0.65rem] text-muted-foreground/60 uppercase tracking-wider">
-                    Discovered via {t.source.replace(/_/g, ' ')}
+                    Discovered via {t.source.replace(/_/g, " ")}
                   </span>
                 </div>
               </div>
