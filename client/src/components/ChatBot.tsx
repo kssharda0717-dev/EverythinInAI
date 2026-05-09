@@ -43,7 +43,7 @@ export default function ChatBot() {
   const [messages, setMessages] = useState<Message[]>([
     {
       role: 'assistant',
-      text: "Hey, I'm Avi 👋 Tell me what you need to build and I'll find the right AI tool for it.",
+      text: "Hey, I'm Rhea 👋 Tell me what you need to build and I'll find the right AI tool for it.",
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -145,7 +145,7 @@ export default function ChatBot() {
                 <Sparkles className="w-4 h-4" />
               </div>
               <div className="flex-1">
-                <div className="text-sm font-semibold">Avi · AI Tool Finder</div>
+                <div className="text-sm font-semibold">Rhea · AI Tool Finder</div>
                 <div className="text-[0.65rem] text-white/70">Ask me to find any tool</div>
               </div>
               <button

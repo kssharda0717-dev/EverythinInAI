@@ -141,8 +141,8 @@ async function runLurePhoto(calendarRow) {
   await recordStep(calendarRow.id, 'lure_photo', 'done', data, 0.025, r.durationMs);
   return {
     url: data.url,
-    caption: `${data.sceneLabel || 'Scene'} — Avi`,           // simple caption for now
-    hashtags: '#avi #ai #aitoolsdaily #everythininai #productivity #techreviewer',
+    caption: `${data.sceneLabel || 'Scene'} — Rhea Kapoor`,
+    hashtags: '#rhea #ai #aitoolsdaily #everythininai #productivity #techreviewer',
     type: 'image/webp',
     costUsd: 0.025,
   };
@@ -178,8 +178,8 @@ async function runLifestyleReel(calendarRow) {
 
   return {
     url,
-    caption: `Slow Saturday vibes ✨\n\nA quiet morning, a coffee, and the time to actually think.\n\n— @avi.in.ai`,
-    hashtags: '#bandragirls #slowliving #morningroutine #aviinai #everythininai',
+    caption: `Slow Saturday vibes ✨\n\nA quiet morning, a coffee, and the time to actually think.\n\n— @rhea.builds`,
+    hashtags: '#bandragirls #slowliving #morningroutine #rheabuilds #everythininai',
     type: 'video/mp4',
     costUsd: 0.10,
   };

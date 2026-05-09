@@ -196,7 +196,7 @@ async function handleStatus(chatId) {
 
 async function handleHelp(chatId) {
   await reply(chatId,
-    `🤖 *Avi Bot Commands*\n\n` +
+    `🤖 *Rhea Bot Commands*\n\n` +
     `\`/pick_<id>\`   pick a tech-reel concept (8-char id from morning ideation)\n` +
     `\`/go\`           fire today's lure-photo or lifestyle-reel render\n` +
     `\`/status\`       check today's calendar state\n` +
