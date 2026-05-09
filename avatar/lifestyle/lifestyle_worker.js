@@ -133,15 +133,22 @@ async function renderKeyframe({ persona, scene, outfit, trigger, runId, idx }) {
 function buildKenBurnsFilter(numImages, perImageDur, transitionDur) {
   const zoomFrames = Math.round(perImageDur * FPS);
   const inputFilters = [];
+  // Pre-scale to a larger canvas so zoompan has room to zoom into without
+  // blurring. Source webp from Flux is ~896x1088; we upscale to W*2 x H*2 first,
+  // then center-crop to the W*2 x H*2 canvas, THEN zoompan rescales down to W x H.
+  const upW = W * 2;
+  const upH = H * 2;
   for (let i = 0; i < numImages; i++) {
     const zoomDir = i % 2 === 0
       ? `zoom='min(zoom+0.0006,1.18)'`
       : `zoom='if(lte(zoom,1.001),1.18,max(zoom-0.0006,1.0))'`;
     const pan = `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`;
+    // Use scale=upW:upH (no force_original_aspect_ratio) so the source ALWAYS
+    // gets resized to the target canvas regardless of input dimensions. Then
+    // zoompan does the actual Ken Burns zoom and outputs at W x H.
     inputFilters.push(
-      `[${i}:v]scale=${W * 1.4}:${H * 1.4}:force_original_aspect_ratio=increase,` +
-      `crop=${W * 1.4}:${H * 1.4},` +
-      `zoompan=${zoomDir}:${pan}:d=${zoomFrames}:s=${W}x${H}:fps=${FPS},setsar=1[v${i}]`
+      `[${i}:v]scale=${upW}:${upH}:flags=lanczos,setsar=1,` +
+      `zoompan=${zoomDir}:${pan}:d=${zoomFrames}:s=${W}x${H}:fps=${FPS}[v${i}]`
     );
   }
   const xfade = [];
