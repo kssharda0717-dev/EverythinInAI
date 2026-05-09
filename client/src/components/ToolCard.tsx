@@ -5,9 +5,15 @@
  */
 
 import { motion } from "framer-motion";
-import { ExternalLink, ArrowUpRight, Star } from "lucide-react";
+import { ExternalLink, ArrowUpRight, Star, Github } from "lucide-react";
 import type { AITool } from "@/lib/data";
 import { CATEGORY_BADGE_MAP } from "@/lib/data";
+
+// True if the tool's primary URL is a GitHub repo (and there's no separate hosted homepage)
+function isGithubOnly(tool: AITool): boolean {
+  const isGithubUrl = (u: string | undefined) => !!u && /(^|\/\/)(www\.)?github\.com\//i.test(u);
+  return isGithubUrl(tool.url) && !tool.homepage;
+}
 
 interface ToolCardProps {
   tool: AITool;
@@ -78,6 +84,13 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
             <ArrowUpRight className="w-3 h-3" />
             {tool.upvotes.toLocaleString()}
           </span>
+          {/* GitHub repo indicator (Phase 17) */}
+          {isGithubOnly(tool) && (
+            <span className="inline-flex items-center gap-1 text-[0.65rem] font-medium px-2 py-0.5 rounded-md bg-[oklch(0.97_0.01_280)] text-[oklch(0.45_0.12_280)]">
+              <Github className="w-3 h-3" />
+              GitHub Repo
+            </span>
+          )}
         </div>
 
         {/* Pricing badge */}

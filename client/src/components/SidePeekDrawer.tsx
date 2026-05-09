@@ -102,6 +102,7 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
 
   const badgeClass = CATEGORY_BADGE_MAP[t.category] || "badge-other";
   const displayName = t.displayName || t.name;
+  const isGithubOnly = !!t.url && /^https?:\/\/(www\.)?github\.com\//i.test(t.url) && !t.homepage;
 
   return (
     <AnimatePresence>
@@ -162,10 +163,27 @@ export default function SidePeekDrawer({ tool, isOpen, onClose }: SidePeekDrawer
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white text-sm font-medium hover:opacity-90 transition-opacity mb-2"
                 >
-                  <Globe className="w-4 h-4" />
-                  Visit {t.name}
-                  <ExternalLink className="w-3.5 h-3.5" />
+                  {isGithubOnly ? (
+                    <><Github className="w-4 h-4" /> Open on GitHub <ExternalLink className="w-3.5 h-3.5" /></>
+                  ) : (
+                    <><Globe className="w-4 h-4" /> Visit {t.name} <ExternalLink className="w-3.5 h-3.5" /></>
+                  )}
                 </a>
+
+                {/* GitHub-only callout (Phase 17) */}
+                {isGithubOnly && (
+                  <div className="mb-7 mt-4 p-4 rounded-2xl bg-[oklch(0.97_0.01_280)] border border-[oklch(0.90_0.02_280)]">
+                    <div className="flex items-start gap-3">
+                      <Github className="w-5 h-5 text-[oklch(0.45_0.12_280)] flex-shrink-0 mt-0.5" />
+                      <div>
+                        <div className="text-sm font-semibold text-[oklch(0.30_0.10_280)] mb-1">This is a GitHub repository</div>
+                        <div className="text-xs text-muted-foreground leading-relaxed">
+                          It's open-source code you'll need to clone, install and run yourself — not a hosted product you can sign up for. Look at the README on the linked GitHub page for setup instructions.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {t.sourceUrl && (
                   <div className="mb-7">

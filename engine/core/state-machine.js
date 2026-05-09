@@ -268,8 +268,8 @@ class DiscoveryStateMachine {
 
         for (const result of results.items) {
           // v2: accept anything with a valid type AND confidence ≥ 0.6
-          // (lower threshold for signals because news classification is harder than tool classification)
-          const isAcceptedTool = result.type === 'tool' && result.confidence >= 0.7;
+          // Phase 17: tool threshold bumped 0.7 → 0.75 to keep marginal items out of the directory.
+          const isAcceptedTool = result.type === 'tool' && result.confidence >= 0.75;
           const isAcceptedSignal = result.type && result.type !== 'tool' && result.confidence >= 0.6;
 
           if (isAcceptedTool || isAcceptedSignal) {

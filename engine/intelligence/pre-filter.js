@@ -92,6 +92,59 @@ const ACADEMIC_DOMAINS = [
   'openreview.net', 'jmlr.org',
 ];
 
+// HARD BLACKLIST: URL patterns that are NEVER tools (Phase 17 credibility fix)
+// Anything matching these patterns is rejected before any other scoring runs.
+// This stops LinkedIn profiles, Medium articles, YouTube videos, Twitter posts,
+// Reddit threads, and similar from polluting the directory.
+const HARD_BLACKLIST_PATTERNS = [
+  // Profile pages (people, not products)
+  /linkedin\.com\/(in|posts|pulse|company|jobs)\//i,
+  /twitter\.com\/[^/]+\/status\//i,
+  /x\.com\/[^/]+\/status\//i,
+  /facebook\.com\//i,
+  /instagram\.com\/(p|reel|tv)\//i,
+  /threads\.net\//i,
+  /tiktok\.com\/@/i,
+
+  // Blog / article URLs
+  /medium\.com\/(@|.*\/.*-)/i,           // medium.com/@user OR medium.com/pub/article-slug
+  /\.medium\.com\//i,                    // sub.medium.com/...
+  /substack\.com\/p\//i,                 // substack post
+  /dev\.to\/[^/]+\/[^/]+/i,              // dev.to articles (long path)
+  /hashnode\.com\//i,
+  /hashnode\.dev\//i,
+  /freecodecamp\.org\/news\//i,
+  /geeksforgeeks\.org\//i,
+  /towardsdatascience\.com\//i,
+  /analyticsvidhya\.com\//i,
+  /kdnuggets\.com\//i,
+  /machinelearningmastery\.com\//i,
+
+  // Reddit / HN / discussion threads (not products)
+  /reddit\.com\/r\/[^/]+\/comments\//i,
+  /news\.ycombinator\.com\/item/i,
+
+  // Video / podcast (not products)
+  /youtube\.com\/watch/i,
+  /youtu\.be\//i,
+  /vimeo\.com\/\d+/i,
+  /spotify\.com\/(episode|show)\//i,
+
+  // Q&A / forum threads
+  /stackoverflow\.com\/questions\//i,
+  /quora\.com\//i,
+
+  // Newsletter archives (not signup pages — rejecting individual issues)
+  /\/issues?\/\d+/i,                     // /issue/123 or /issues/123
+  /\/newsletter\/[^/]+\/[^/]+/i,
+
+  // App Store / Play Store / Chrome Web Store (treat as discovery, not tools)
+  /apps\.apple\.com\//i,
+  /play\.google\.com\/store\//i,
+  /chrome\.google\.com\/webstore\//i,
+  /chromewebstore\.google\.com\//i,
+];
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // SCORING ENGINE
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -156,11 +209,19 @@ class HeuristicPreFilter {
     let score = 0;
     const reasons = [];
 
+    // ── DIMENSION 0: HARD BLACKLIST (Phase 17) ─ instant rejection ──
+    // Profile pages, articles, threads, videos, etc. are NEVER tools.
+    // Reject before any other scoring to save Gemini money + protect credibility.
+    const hardMatch = HARD_BLACKLIST_PATTERNS.find(rx => rx.test(url));
+    if (hardMatch) {
+      return { score: -100, reasons: [`Hard blacklist: URL pattern (${hardMatch.toString().slice(0, 40)})`] };
+    }
+
     // ── DIMENSION 1: ANTI-SIGNALS (checked first — can push score negative) ──
 
     // Academic domain → hard reject
     if (ACADEMIC_DOMAINS.some(d => domain.includes(d))) {
-      return { score: -10, reasons: ['Hard reject: academic domain'] };
+      return { score: -100, reasons: ['Hard reject: academic domain'] };
     }
 
     // Anti-pattern title match
