@@ -255,6 +255,7 @@ interface StatsResponse {
   totalCategories: number;
   lastUpdated: string | null;
   lastRunMerged: number;
+  addedLast24h: number;
 }
 
 /**
@@ -264,10 +265,11 @@ export function useStats() {
   const [stats, setStats] = useState<StatsResponse>({
     totalTools: 0,
     totalSources: 5,
-    updateFrequency: '60min',
+    updateFrequency: '6h',
     totalCategories: 14,
     lastUpdated: null,
     lastRunMerged: 0,
+    addedLast24h: 0,
   });
 
   useEffect(() => {
@@ -277,10 +279,11 @@ export function useStats() {
       setStats({
         totalTools: MOCK_TOOLS.length,
         totalSources: 5,
-        updateFrequency: '60min',
+        updateFrequency: '6h',
         totalCategories: 14,
         lastUpdated: null,
         lastRunMerged: 0,
+        addedLast24h: 0,
       });
       return;
     }
@@ -306,14 +309,26 @@ export function useStats() {
           .limit(1)
           .maybeSingle();
 
+        // Sum items_merged across all 'done' runs in the last 24 hours — the
+        // "how many new tools today" badge. (Some new tools never count if
+        // they're duplicates of existing rows; this is the engine's truth.)
+        const since24h = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+        const { data: last24Runs } = await supabase
+          .from('runs')
+          .select('items_merged')
+          .eq('state', 'done')
+          .gte('completed_at', since24h);
+        const addedLast24h = (last24Runs || []).reduce((sum: number, r: any) => sum + (r.items_merged || 0), 0);
+
         if (cancelled) return;
         setStats({
           totalTools: toolCount || 0,
           totalSources: 5,
-          updateFrequency: '60min',
+          updateFrequency: '6h',
           totalCategories: uniqueCategories.size || 14,
           lastUpdated: latestRun?.completed_at || null,
           lastRunMerged: latestRun?.items_merged || 0,
+          addedLast24h,
         });
       } catch (err: any) {
         if (cancelled) return;
@@ -321,10 +336,11 @@ export function useStats() {
         setStats({
           totalTools: MOCK_TOOLS.length,
           totalSources: 5,
-          updateFrequency: '60min',
+          updateFrequency: '6h',
           totalCategories: 14,
           lastUpdated: null,
           lastRunMerged: 0,
+          addedLast24h: 0,
         });
       }
     })();

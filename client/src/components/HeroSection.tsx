@@ -124,7 +124,7 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
           className="text-subheading text-muted-foreground mb-10 max-w-xl mx-auto"
         >
           The world's most comprehensive real-time directory of AI tools.
-          Updated every hour.
+          Refreshed every 6 hours, with daily backfill.
         </motion.p>
 
         {/* Search Bar */}

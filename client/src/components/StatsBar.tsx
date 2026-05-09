@@ -7,7 +7,7 @@
 
 import { motion, useInView } from "framer-motion";
 import { useRef, useState, useEffect } from "react";
-import { Zap, Globe, Clock, TrendingUp } from "lucide-react";
+import { Zap, Globe, Clock, TrendingUp, Sparkles } from "lucide-react";
 
 interface StatItemProps {
   icon: React.ReactNode;
@@ -74,16 +74,20 @@ interface StatsBarProps {
   sourceCount?: number;
   updateFrequency?: string;
   categoryCount?: number;
+  addedLast24h?: number;
 }
 
 export default function StatsBar({
   toolCount = 18,
   sourceCount = 5,
-  updateFrequency = "60min",
+  updateFrequency = "6h",
   categoryCount = 14,
+  addedLast24h = 0,
 }: StatsBarProps) {
-  // Parse the numeric part of updateFrequency (e.g., "60min" → 60)
-  const freqNum = parseInt(updateFrequency) || 60;
+  // Parse the numeric part. "6h" → 6, "60min" → 60.
+  const freqMatch = (updateFrequency || '').match(/(\d+)\s*(h|min)?/i);
+  const freqNum = freqMatch ? parseInt(freqMatch[1], 10) : 6;
+  const freqUnit = (freqMatch && freqMatch[2]) ? freqMatch[2].toLowerCase() : 'h';
 
   return (
     <section className="px-4 sm:px-6 lg:px-8 -mt-4 mb-12 relative z-10">
@@ -106,17 +110,27 @@ export default function StatsBar({
           <StatItem
             icon={<Clock className="w-4.5 h-4.5 text-[oklch(0.55_0.18_230)]" />}
             value={freqNum}
-            suffix="min"
-            label="Update frequency"
+            suffix={freqUnit}
+            label="Refresh frequency"
             delay={0.3}
           />
           <div className="w-px h-8 bg-[oklch(0.92_0.005_230)]" />
           <StatItem
-            icon={<TrendingUp className="w-4.5 h-4.5 text-[oklch(0.65_0.15_185)]" />}
-            value={categoryCount}
-            label="Categories"
+            icon={<Sparkles className="w-4.5 h-4.5 text-[oklch(0.65_0.15_185)]" />}
+            value={addedLast24h}
+            suffix=" new"
+            label="Added in last 24h"
             delay={0.4}
           />
+          <div className="w-px h-8 bg-[oklch(0.92_0.005_230)] hidden md:block" />
+          <div className="hidden md:flex items-center gap-3">
+            <StatItem
+              icon={<TrendingUp className="w-4.5 h-4.5 text-[oklch(0.65_0.15_185)]" />}
+              value={categoryCount}
+              label="Categories"
+              delay={0.5}
+            />
+          </div>
         </div>
       </div>
     </section>

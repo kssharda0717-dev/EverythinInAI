@@ -65,6 +65,7 @@ export default function Home() {
         sourceCount={stats.totalSources}
         updateFrequency={stats.updateFrequency}
         categoryCount={stats.totalCategories}
+        addedLast24h={stats.addedLast24h}
       />
       {!searchQuery && (
         <FeaturedCarousel tools={featuredTools} onToolClick={handleFeaturedClick} />
