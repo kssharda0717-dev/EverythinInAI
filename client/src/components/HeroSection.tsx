@@ -41,6 +41,16 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
     return () => clearTimeout(timer);
   }, [query, onSearch]);
 
+  // Reset local query state when logo is clicked
+  useEffect(() => {
+    const handler = () => {
+      setQuery('');
+      setIsFocused(false);
+    };
+    window.addEventListener('reset-home-filters', handler);
+    return () => window.removeEventListener('reset-home-filters', handler);
+  }, []);
+
   return (
     <section
       ref={heroRef}

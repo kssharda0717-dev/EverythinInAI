@@ -23,6 +23,34 @@ const dbModule = require('../engine/core/database');
 const { createLogger } = require('../engine/utils/logger');
 const { isLiveUrl } = require('../engine/utils/url_validator');
 
+// Same blacklist as engine/intelligence/pre-filter.js — a homepage matching
+// any of these patterns is treated as DEAD even if it returns 200 (e.g.
+// LinkedIn/Medium/YouTube pages may be live but they're not real homepages).
+const HOMEPAGE_BLACKLIST = [
+  /linkedin\.com\//i,
+  /twitter\.com\//i,
+  /x\.com\//i,
+  /facebook\.com\//i,
+  /instagram\.com\//i,
+  /threads\.net\//i,
+  /tiktok\.com\//i,
+  /medium\.com\//i,
+  /\.medium\.com\//i,
+  /substack\.com\/p\//i,
+  /reddit\.com\//i,
+  /news\.ycombinator\.com\//i,
+  /youtube\.com\//i,
+  /youtu\.be\//i,
+  /vimeo\.com\//i,
+  /stackoverflow\.com\//i,
+  /quora\.com\//i,
+  /apps\.apple\.com\//i,
+  /play\.google\.com\/store\//i,
+  /chromewebstore\.google\.com\//i,
+  /chrome\.google\.com\/webstore\//i,
+  /arxiv\.org\//i,
+];
+
 const log = createLogger('validate_homepages');
 
 function parseArgs(argv) {
@@ -59,6 +87,16 @@ async function main() {
       const i = idx++;
       const t = data[i];
       try {
+        // First: blacklist check — LinkedIn/Medium/YouTube/etc. homepages are NOT
+        // real homepages even if they return 200. Always strip them.
+        if (HOMEPAGE_BLACKLIST.some(rx => rx.test(t.homepage))) {
+          dead++;
+          log.warn(`  ✗ ${t.slug.padEnd(28)} ${t.homepage}  (blacklisted homepage pattern)`);
+          if (!args.dryRun) {
+            await db.from('tools').update({ homepage: null, updated_at: new Date().toISOString() }).eq('id', t.id);
+          }
+          continue;
+        }
         const check = await isLiveUrl(t.homepage, { strict: true });
         if (check.ok) {
           alive++;

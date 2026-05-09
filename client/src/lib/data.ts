@@ -28,6 +28,8 @@ export interface AITool {
   cons?: string[];
   bestFor?: string;
   searchAliases?: string[];
+  homepage?: string;       // separate from `url` so we can detect GitHub-only tools
+  addedAt?: string;        // ISO timestamp — used for "Just Added" sorting
 }
 
 export const CATEGORIES = [

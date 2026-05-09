@@ -58,11 +58,11 @@ export default function Navbar() {
             </div>
           </a>
 
-          {/* Nav Links */}
+          {/* Nav Links — mobile-responsive: text labels hidden on smallest screens */}
           <div className="flex items-center gap-1">
             <Link href="/">
               <div
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                className={`hidden sm:block px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
                   location === "/"
                     ? "bg-[oklch(0.94_0.01_230)] text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-[oklch(0.97_0.005_230)]"
@@ -73,24 +73,24 @@ export default function Navbar() {
             </Link>
             <Link href="/launchpad">
               <div
-                className={`px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                className={`px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
                   location === "/launchpad"
                     ? "bg-[oklch(0.94_0.01_230)] text-foreground"
                     : "text-muted-foreground hover:text-foreground hover:bg-[oklch(0.97_0.005_230)]"
                 }`}
               >
                 <Rocket className="w-3.5 h-3.5" />
-                Launchpad
+                <span className="hidden sm:inline">Launchpad</span>
               </div>
             </Link>
             {/* Newsletter pill */}
             <MagneticButton strength={0.2}>
               <button
                 onClick={() => setNewsletterOpen(true)}
-                className="ml-1 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white shadow-sm hover:opacity-90"
+                className="ml-1 px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white shadow-sm hover:opacity-90"
               >
                 <Mail className="w-3.5 h-3.5" />
-                Get the brief
+                <span className="hidden sm:inline">Get the brief</span>
               </button>
             </MagneticButton>
           </div>

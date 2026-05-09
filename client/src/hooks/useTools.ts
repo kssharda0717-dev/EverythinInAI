@@ -54,6 +54,8 @@ function mapBackendTool(tool: any): AITool {
     cons: tool.cons || [],
     bestFor: tool.best_for || '',
     searchAliases: tool.search_aliases || [],
+    homepage: homepageRaw || undefined,
+    addedAt: tool.added_at || tool.published_at || undefined,
   };
 }
 

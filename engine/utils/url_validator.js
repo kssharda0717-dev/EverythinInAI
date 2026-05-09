@@ -26,7 +26,7 @@ async function isLiveUrl(url, opts = {}) {
   try { parsed = new URL(url); } catch { return { ok: false, status: 'BAD_URL', finalUrl: null }; }
   if (!/^https?:$/.test(parsed.protocol)) return { ok: false, status: 'BAD_PROTO', finalUrl: null };
 
-  // Reject obviously dead patterns (Heroku review apps, DigitalOcean app preview etc.) before network call
+  // Reject obviously dead patterns AND social/article-only hosts before the network call
   const badHosts = [
     /\.ondigitalocean\.app$/i,         // temporary DigitalOcean previews — almost always torn down
     /\.netlify\.app$/i,                // Netlify previews (often stale)
@@ -34,6 +34,28 @@ async function isLiveUrl(url, opts = {}) {
     /\.herokuapp\.com$/i,              // Heroku free tier dyno apps (long since gone)
     /^localhost$/i,
     /^127\./,
+    // Phase 18: social profiles / articles aren't real homepages even when live
+    /^(www\.)?linkedin\.com$/i,
+    /^(www\.)?twitter\.com$/i,
+    /^(www\.)?x\.com$/i,
+    /^(www\.)?facebook\.com$/i,
+    /^(www\.)?instagram\.com$/i,
+    /^(www\.)?threads\.net$/i,
+    /^(www\.)?tiktok\.com$/i,
+    /^(www\.)?medium\.com$/i,
+    /\.medium\.com$/i,
+    /^(www\.)?reddit\.com$/i,
+    /^(www\.)?news\.ycombinator\.com$/i,
+    /^(www\.)?youtube\.com$/i,
+    /^(www\.)?youtu\.be$/i,
+    /^(www\.)?vimeo\.com$/i,
+    /^(www\.)?stackoverflow\.com$/i,
+    /^(www\.)?quora\.com$/i,
+    /^apps\.apple\.com$/i,
+    /^play\.google\.com$/i,
+    /^chromewebstore\.google\.com$/i,
+    /^chrome\.google\.com$/i,
+    /^arxiv\.org$/i,
   ];
   if (opts.strict && badHosts.some(rx => rx.test(parsed.hostname))) {
     return { ok: false, status: 'BLACKLISTED_HOST', finalUrl: null };
