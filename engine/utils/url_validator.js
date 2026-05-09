@@ -61,6 +61,13 @@ async function isLiveUrl(url, opts = {}) {
     return { ok: false, status: 'BLACKLISTED_HOST', finalUrl: null };
   }
 
+  // "Soft-fail" responses indicate anti-bot defenses, NOT a dead URL.
+  // Cloudflare / Vercel bot fight mode commonly returns 403/429/503 for any
+  // request from a data-center IP (which our VM is). Treating those as dead
+  // would kill legitimate tools like Midjourney, DeepSeek, Mistral, Perplexity.
+  const SOFT_FAIL_STATUSES = new Set([401, 402, 403, 405, 406, 408, 409, 425, 429, 430, 451, 500, 502, 503, 504, 520, 521, 522, 523, 525, 526]);
+  const SOFT_FAIL_ERR_CODES = new Set(['CERT_HAS_EXPIRED', 'ERR_TLS_CERT_ALTNAME_INVALID', 'DEPTH_ZERO_SELF_SIGNED_CERT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE', 'ECONNABORTED']);
+
   // Try HEAD
   try {
     const r = await axios.head(url, {
@@ -72,14 +79,22 @@ async function isLiveUrl(url, opts = {}) {
     if (r.status >= 200 && r.status < 400) {
       return { ok: true, status: r.status, finalUrl: r.request?.res?.responseUrl || url };
     }
+    // Anti-bot — don't mark as dead, mark as 'unknown' (treated as ok by validator scripts)
+    if (SOFT_FAIL_STATUSES.has(r.status)) {
+      return { ok: true, status: r.status, finalUrl: url, softFail: true };
+    }
     if (r.status === 405 || r.status === 501) {
       // Fall through to GET — some servers reject HEAD
     } else {
       return { ok: false, status: r.status, finalUrl: null };
     }
   } catch (err) {
-    // DNS failure / connection refused / timeout — fall through to GET only on transient errors
     const code = err.code || '';
+    // SSL / TLS / abort = soft fail (real users would still get through with a warning click)
+    if (SOFT_FAIL_ERR_CODES.has(code)) {
+      return { ok: true, status: code, finalUrl: url, softFail: true };
+    }
+    // Transient — fall through to GET
     if (!['ECONNRESET', 'ETIMEDOUT', 'ECONNREFUSED'].includes(code)) {
       return { ok: false, status: code || err.message, finalUrl: null };
     }
@@ -95,11 +110,19 @@ async function isLiveUrl(url, opts = {}) {
       headers: { 'User-Agent': UA },
     });
     r.data?.destroy?.();
-    return r.status >= 200 && r.status < 400
-      ? { ok: true, status: r.status, finalUrl: r.request?.res?.responseUrl || url }
-      : { ok: false, status: r.status, finalUrl: null };
+    if (r.status >= 200 && r.status < 400) {
+      return { ok: true, status: r.status, finalUrl: r.request?.res?.responseUrl || url };
+    }
+    if (SOFT_FAIL_STATUSES.has(r.status)) {
+      return { ok: true, status: r.status, finalUrl: url, softFail: true };
+    }
+    return { ok: false, status: r.status, finalUrl: null };
   } catch (err) {
-    return { ok: false, status: err.code || err.message, finalUrl: null };
+    const code = err.code || '';
+    if (SOFT_FAIL_ERR_CODES.has(code)) {
+      return { ok: true, status: code, finalUrl: url, softFail: true };
+    }
+    return { ok: false, status: code || err.message, finalUrl: null };
   }
 }
 
