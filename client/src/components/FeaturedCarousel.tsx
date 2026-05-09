@@ -5,10 +5,10 @@
  */
 
 import { motion } from "framer-motion";
-import { ArrowRight, Star, ExternalLink } from "lucide-react";
+import { useRef } from "react";
+import { ArrowRight, Star, ChevronLeft, ChevronRight } from "lucide-react";
 import type { AITool } from "@/lib/data";
 import { CATEGORY_BADGE_MAP } from "@/lib/data";
-import MagneticButton from "./MagneticButton";
 
 interface FeaturedCarouselProps {
   tools: AITool[];
@@ -16,12 +16,35 @@ interface FeaturedCarouselProps {
 }
 
 export default function FeaturedCarousel({ tools, onToolClick }: FeaturedCarouselProps) {
-  if (tools.length === 0) return null;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const scrollBy = (dir: 1 | -1) => {
+    if (!scrollRef.current) return;
+    const cardWidth = 360 + 16;
+    scrollRef.current.scrollBy({ left: dir * cardWidth, behavior: 'smooth' });
+  };
+  // B12: graceful empty state when nothing trending
+  if (tools.length === 0) {
+    return (
+      <section className="px-4 sm:px-6 lg:px-8 mb-14">
+        <div className="max-w-[1400px] mx-auto">
+          <div className="flex items-center gap-3 mb-5">
+            <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[oklch(0.75_0.12_230)] to-[oklch(0.82_0.12_185)] flex items-center justify-center">
+              <Star className="w-3 h-3 text-white fill-white" />
+            </div>
+            <h2 className="text-heading text-foreground">Trending Now</h2>
+          </div>
+          <div className="rounded-2xl bg-[oklch(0.97_0.005_230)] px-6 py-10 text-center">
+            <p className="text-sm text-muted-foreground">No trending tools right now — check back in a few hours.</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="px-4 sm:px-6 lg:px-8 mb-14">
       <div className="max-w-[1400px] mx-auto">
-        {/* Section header */}
+        {/* Section header (B8: scroll buttons) */}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[oklch(0.75_0.12_230)] to-[oklch(0.82_0.12_185)] flex items-center justify-center">
@@ -29,10 +52,26 @@ export default function FeaturedCarousel({ tools, onToolClick }: FeaturedCarouse
             </div>
             <h2 className="text-heading text-foreground">Trending Now</h2>
           </div>
+          <div className="hidden sm:flex items-center gap-1.5">
+            <button
+              onClick={() => scrollBy(-1)}
+              className="w-9 h-9 rounded-xl bg-white hover:bg-[oklch(0.97_0.005_230)] elevation-1 flex items-center justify-center transition-colors"
+              aria-label="Scroll left"
+            >
+              <ChevronLeft className="w-4 h-4 text-foreground" />
+            </button>
+            <button
+              onClick={() => scrollBy(1)}
+              className="w-9 h-9 rounded-xl bg-white hover:bg-[oklch(0.97_0.005_230)] elevation-1 flex items-center justify-center transition-colors"
+              aria-label="Scroll right"
+            >
+              <ChevronRight className="w-4 h-4 text-foreground" />
+            </button>
+          </div>
         </div>
 
         {/* Horizontal scroll */}
-        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x snap-mandatory">
+        <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide -mx-4 px-4 snap-x snap-mandatory scroll-smooth">
           {tools.map((tool, index) => {
             const badgeClass = CATEGORY_BADGE_MAP[tool.category] || "badge-other";
             return (

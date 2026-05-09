@@ -5,7 +5,7 @@
  * Falls back to mock data if the API is unavailable.
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import StatsBar from "@/components/StatsBar";
@@ -32,6 +32,14 @@ export default function Home() {
 
   const [drawerTool, setDrawerTool] = useState<AITool | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // B6: remember scroll position when opening drawer, restore on close
+  const scrollMemoryRef = useRef<number>(0);
+  // B4: hide "Using demo data" banner during the first 2 seconds (initial load grace)
+  const [showDemoBanner, setShowDemoBanner] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setShowDemoBanner(true), 2000);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleSearch = useCallback(
     (query: string) => {
@@ -52,8 +60,18 @@ export default function Home() {
   }, [search]);
 
   const handleFeaturedClick = useCallback((tool: AITool) => {
+    scrollMemoryRef.current = window.scrollY;
     setDrawerTool(tool);
     setDrawerOpen(true);
+  }, []);
+
+  // B6: restore scroll position when drawer closes
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+    // Use rAF to wait for the drawer's exit animation to finish before snapping back
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollMemoryRef.current, behavior: 'auto' });
+    });
   }, []);
 
   return (
@@ -73,8 +91,8 @@ export default function Home() {
       <DiscoveryGrid tools={filteredTools} isLoading={isLoading} />
       <Footer />
 
-      {/* Connection status indicator */}
-      {!isApiConnected && (
+      {/* Connection status indicator (B4: only after 2s grace) */}
+      {!isApiConnected && showDemoBanner && (
         <div className="fixed bottom-4 left-4 z-40 px-3 py-1.5 rounded-lg glass text-xs text-muted-foreground">
           Using demo data — connect Supabase for live tools
         </div>
@@ -84,7 +102,7 @@ export default function Home() {
       <SidePeekDrawer
         tool={drawerTool}
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleDrawerClose}
       />
 
       {/* AI assistant chatbot — floating bottom-right */}

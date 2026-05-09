@@ -46,7 +46,7 @@ function AnimatedCounter({ target, delay }: { target: number; delay: number }) {
   return <span ref={ref}>{count.toLocaleString()}</span>;
 }
 
-function StatItem({ icon, value, suffix = "", label, delay }: StatItemProps) {
+function StatItem({ icon, value, suffix = "", label, delay, animate = true }: StatItemProps & { animate?: boolean }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
@@ -60,8 +60,11 @@ function StatItem({ icon, value, suffix = "", label, delay }: StatItemProps) {
       </div>
       <div>
         <p className="text-lg font-semibold text-foreground leading-tight">
-          <AnimatedCounter target={value} delay={delay * 1000} />
-          {suffix}
+          {animate ? (
+            <><AnimatedCounter target={value} delay={delay * 1000} />{suffix}</>
+          ) : (
+            <>{value}{suffix}</>
+          )}
         </p>
         <p className="text-xs text-muted-foreground">{label}</p>
       </div>
@@ -113,6 +116,7 @@ export default function StatsBar({
             suffix={freqUnit}
             label="Refresh frequency"
             delay={0.3}
+            animate={false}
           />
           <div className="w-px h-8 bg-[oklch(0.92_0.005_230)]" />
           <StatItem

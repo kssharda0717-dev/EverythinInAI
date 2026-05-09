@@ -5,7 +5,7 @@
  * Drawer is full-screen on mobile (handled by SidePeekDrawer max-w-lg w-full).
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Filter, Flame, Sparkles, LayoutGrid } from "lucide-react";
 import ToolCard, { ToolCardSkeleton } from "./ToolCard";
@@ -72,10 +72,19 @@ export default function DiscoveryGrid({ tools, isLoading = false }: DiscoveryGri
     return ["All", ...CATEGORIES.filter((c) => cats.has(c))];
   }, [tools]);
 
+  // B6: remember scroll position when opening drawer, restore on close
+  const scrollMemoryRef = useRef<number>(0);
   const handleToolClick = (tool: AITool) => {
+    scrollMemoryRef.current = window.scrollY;
     setSelectedTool(tool);
     setDrawerOpen(true);
   };
+  const handleDrawerClose = useCallback(() => {
+    setDrawerOpen(false);
+    requestAnimationFrame(() => {
+      window.scrollTo({ top: scrollMemoryRef.current, behavior: 'auto' });
+    });
+  }, []);
 
   return (
     <section className="relative px-4 sm:px-6 lg:px-8 pb-20">
@@ -170,11 +179,11 @@ export default function DiscoveryGrid({ tools, isLoading = false }: DiscoveryGri
         )}
       </div>
 
-      {/* Side-Peek Drawer */}
+      {/* Side-Peek Drawer (B6: scroll preservation) */}
       <SidePeekDrawer
         tool={selectedTool}
         isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
+        onClose={handleDrawerClose}
       />
     </section>
   );

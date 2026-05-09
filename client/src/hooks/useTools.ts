@@ -161,10 +161,24 @@ export function useTools() {
     }
 
     try {
+      const q = query.trim().toLowerCase();
       const term = `%${query.replace(/[%_]/g, '\\$&')}%`;
-      // Search across name, display_name, tagline, description, category, AND search_aliases
-      // search_aliases is text[] so we use `contains` (cs) for an exact tag match plus ilike for partial
-      const { data, error } = await supabase
+      const slug = q.replace(/\s+/g, '-');                  // "chat gpt" → "chat-gpt"
+      const slugAlt = q.replace(/\s+/g, '');                 // "chat gpt" → "chatgpt"
+
+      // FIX B1: dual query strategy
+      //   (a) exactMatches — query for slug-exact / name-exact rows that MUST appear at top
+      //       (curated seeds like 'chatgpt', 'claude', 'gemini' have low upvotes — they would be
+      //        filtered out of a top-100 by-upvotes ilike result, even though they're the brand-name match)
+      //   (b) broadMatches — the existing wide ilike for everything that mentions the term
+      const exactPromise = supabase
+        .from('tools')
+        .select('*')
+        .eq('is_active', true)
+        .or(`slug.eq.${slug},slug.eq.${slugAlt},name_lower.eq.${q}`)
+        .limit(5);
+
+      const broadPromise = supabase
         .from('tools')
         .select('*')
         .eq('is_active', true)
@@ -173,11 +187,23 @@ export function useTools() {
         )
         .limit(100);
 
-      if (error) throw error;
-      const mapped = (data || []).map(mapBackendTool);
+      const [exactRes, broadRes] = await Promise.all([exactPromise, broadPromise]);
+      if (exactRes.error) console.warn('[useTools] exact search error:', exactRes.error.message);
+      if (broadRes.error) throw broadRes.error;
 
-      // Score-based ranking: exact name > prefix > contains > tagline > description
-      const q = query.trim().toLowerCase();
+      // Dedupe by id, keeping exact matches first
+      const seen = new Set<string>();
+      const combined: any[] = [];
+      for (const row of (exactRes.data || [])) {
+        if (!seen.has(row.id)) { combined.push(row); seen.add(row.id); }
+      }
+      for (const row of (broadRes.data || [])) {
+        if (!seen.has(row.id)) { combined.push(row); seen.add(row.id); }
+      }
+      const mapped = combined.map(mapBackendTool);
+
+      // Score-based ranking with EXTRA BIG bonus for exact-slug match (B1 fix)
+      const exactIds = new Set((exactRes.data || []).map((r: any) => r.id));
       const scored = mapped.map((t) => {
         const name = (t.name || '').toLowerCase();
         const dn = (t.displayName || '').toLowerCase();
@@ -185,6 +211,7 @@ export function useTools() {
         const desc = (t.description || '').toLowerCase();
         const cat = (t.category || '').toLowerCase();
         let score = 0;
+        if (exactIds.has(t.id)) score += 100000;            // ← ALWAYS first
         if (name === q) score += 1000;
         if (dn === q) score += 800;
         if (name.startsWith(q)) score += 500;

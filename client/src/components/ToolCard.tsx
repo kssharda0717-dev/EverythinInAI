@@ -5,6 +5,7 @@
  */
 
 import { motion } from "framer-motion";
+import { useRef } from "react";
 import { ExternalLink, ArrowUpRight, Star, Github } from "lucide-react";
 import type { AITool } from "@/lib/data";
 import { CATEGORY_BADGE_MAP } from "@/lib/data";
@@ -13,6 +14,19 @@ import { CATEGORY_BADGE_MAP } from "@/lib/data";
 function isGithubOnly(tool: AITool): boolean {
   const isGithubUrl = (u: string | undefined) => !!u && /(^|\/\/)(www\.)?github\.com\//i.test(u);
   return isGithubUrl(tool.url) && !tool.homepage;
+}
+
+// B9: dedupe so we never prefetch the same slug twice in one session
+const prefetchedSlugs = new Set<string>();
+function prefetchEnrichment(slug: string) {
+  if (!slug || prefetchedSlugs.has(slug)) return;
+  prefetchedSlugs.add(slug);
+  fetch('/api/enrich-on-demand', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ slug }),
+    keepalive: true,                  // ← fires even if user navigates away
+  }).catch(() => {});
 }
 
 interface ToolCardProps {
@@ -32,6 +46,16 @@ const RADIUS_VARIANTS = [
 export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
   const radiusClass = RADIUS_VARIANTS[index % RADIUS_VARIANTS.length];
   const badgeClass = CATEGORY_BADGE_MAP[tool.category] || "badge-other";
+  // B9: prefetch enrichment when user hovers for >150ms (intent signal, not just mouse-pass)
+  const hoverTimerRef = useRef<number | null>(null);
+  const isThin = !tool.useCases?.length && !tool.keyFeatures?.length;
+  const handleMouseEnter = () => {
+    if (!isThin) return;
+    hoverTimerRef.current = window.setTimeout(() => prefetchEnrichment(tool.id), 150);
+  };
+  const handleMouseLeave = () => {
+    if (hoverTimerRef.current) { clearTimeout(hoverTimerRef.current); hoverTimerRef.current = null; }
+  };
 
   return (
     <motion.article
@@ -48,6 +72,9 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
         transition: { type: "spring", stiffness: 300, damping: 20 },
       }}
       onClick={() => onClick(tool)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      onTouchStart={handleMouseEnter}
       className={`group relative bg-white ${radiusClass} p-6 cursor-pointer elevation-1 hover:elevation-3 transition-shadow duration-300`}
     >
       {/* Featured indicator */}
@@ -76,17 +103,17 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
         {tool.tagline}
       </p>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pt-3 border-t border-[oklch(0.95_0.005_230)]">
-        <div className="flex items-center gap-3">
+      {/* Footer (B10: bigger gap between repo-type badge and pricing) */}
+      <div className="flex items-center justify-between pt-3 border-t border-[oklch(0.95_0.005_230)] gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           {/* Upvotes */}
-          <span className="text-functional text-muted-foreground flex items-center gap-1">
+          <span className="text-functional text-muted-foreground flex items-center gap-1 flex-shrink-0">
             <ArrowUpRight className="w-3 h-3" />
             {tool.upvotes.toLocaleString()}
           </span>
           {/* GitHub repo indicator (Phase 17) */}
           {isGithubOnly(tool) && (
-            <span className="inline-flex items-center gap-1 text-[0.65rem] font-medium px-2 py-0.5 rounded-md bg-[oklch(0.97_0.01_280)] text-[oklch(0.45_0.12_280)]">
+            <span className="inline-flex items-center gap-1 text-[0.65rem] font-medium px-2 py-0.5 rounded-md bg-[oklch(0.97_0.01_280)] text-[oklch(0.45_0.12_280)] flex-shrink-0">
               <Github className="w-3 h-3" />
               GitHub Repo
             </span>
@@ -94,7 +121,7 @@ export default function ToolCard({ tool, index, onClick }: ToolCardProps) {
         </div>
 
         {/* Pricing badge */}
-        <span className="text-[0.65rem] font-medium px-2 py-0.5 rounded-md bg-[oklch(0.97_0.005_230)] text-muted-foreground capitalize">
+        <span className="text-[0.65rem] font-medium px-2 py-0.5 rounded-md bg-[oklch(0.97_0.005_230)] text-muted-foreground capitalize flex-shrink-0">
           {tool.pricing === "open_source" ? "open source" : tool.pricing}
         </span>
       </div>

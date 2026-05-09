@@ -33,10 +33,33 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
     onSearch(query);
   };
 
-  // Live search as user types
+  // B11: on mount + browser back/forward, read ?q= from URL and seed the search
+  useEffect(() => {
+    const seed = () => {
+      const params = new URLSearchParams(window.location.search);
+      const q = params.get('q') || '';
+      setQuery(q);
+      onSearch(q);
+    };
+    seed();
+    window.addEventListener('popstate', seed);
+    return () => window.removeEventListener('popstate', seed);
+  }, [onSearch]);
+
+  // Live search as user types + B11: keep URL in sync (debounced)
   useEffect(() => {
     const timer = setTimeout(() => {
       onSearch(query);
+      const params = new URLSearchParams(window.location.search);
+      const current = params.get('q') || '';
+      if (current !== query) {
+        if (query) params.set('q', query); else params.delete('q');
+        const newSearch = params.toString();
+        const newUrl = newSearch
+          ? `${window.location.pathname}?${newSearch}`
+          : window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
     }, 200);
     return () => clearTimeout(timer);
   }, [query, onSearch]);
@@ -46,6 +69,8 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
     const handler = () => {
       setQuery('');
       setIsFocused(false);
+      // also clean URL on reset
+      window.history.replaceState({}, '', window.location.pathname);
     };
     window.addEventListener('reset-home-filters', handler);
     return () => window.removeEventListener('reset-home-filters', handler);

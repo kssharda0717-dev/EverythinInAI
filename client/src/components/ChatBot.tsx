@@ -112,7 +112,22 @@ export default function ChatBot() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Chat panel */}
+      {/* Mobile backdrop — tap to dismiss (B3) */}
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setIsOpen(false)}
+            className="sm:hidden fixed inset-0 z-40 bg-[oklch(0.15_0.01_260_/_30%)] backdrop-blur-md"
+            aria-hidden="true"
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Chat panel — full-screen on mobile, floating bubble on desktop (B3) */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -120,9 +135,11 @@ export default function ChatBot() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
             transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-            className="fixed bottom-24 right-6 z-50 w-[min(420px,calc(100vw-2rem))] h-[min(560px,calc(100vh-8rem))] bg-white rounded-3xl elevation-3 flex flex-col overflow-hidden"
+            className="fixed z-50 bg-white flex flex-col overflow-hidden
+              inset-x-3 bottom-3 top-3 rounded-2xl elevation-3
+              sm:inset-auto sm:bottom-24 sm:right-6 sm:left-auto sm:top-auto sm:w-[min(420px,calc(100vw-2rem))] sm:h-[min(560px,calc(100vh-8rem))] sm:rounded-3xl"
           >
-            {/* Header */}
+            {/* Header (B3: bigger close button on mobile) */}
             <div className="px-5 py-4 bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.60_0.16_210)] text-white flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
                 <Sparkles className="w-4 h-4" />
@@ -131,6 +148,13 @@ export default function ChatBot() {
                 <div className="text-sm font-semibold">Avi · AI Tool Finder</div>
                 <div className="text-[0.65rem] text-white/70">Ask me to find any tool</div>
               </div>
+              <button
+                onClick={() => setIsOpen(false)}
+                className="w-9 h-9 rounded-full bg-white/15 hover:bg-white/25 flex items-center justify-center transition-colors"
+                aria-label="Close chatbot"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
 
             {/* Messages */}
