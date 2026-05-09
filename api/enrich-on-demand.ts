@@ -59,7 +59,7 @@ Return JSON ONLY (no markdown fences, no comments) matching this exact shape:
 }`;
 }
 
-async function callGemini(tool: any, attempt: number = 1): Promise<any | null> {
+async function callGemini(tool: any, attempt: number = 1): Promise<{ json: any; rawText: string; rawData: any }> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');
 
@@ -69,21 +69,33 @@ async function callGemini(tool: any, attempt: number = 1): Promise<any | null> {
     body: JSON.stringify({
       contents: [{ parts: [{ text: buildPrompt(tool, attempt) }] }],
       generationConfig: {
-        responseMimeType: 'application/json',
-        // Slightly higher temperature on retry to break out of stub output
-        temperature: attempt === 1 ? 0.4 : 0.7,
-        maxOutputTokens: 1500,
+        // NOTE: NOT using responseMimeType:'application/json' — it causes parse failures
+        // on certain prompts. Plain text + manual extraction is more robust.
+        temperature: attempt === 1 ? 0.5 : 0.8,
+        maxOutputTokens: 2000,
       },
     }),
   });
 
-  const data: any = await r.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-  try { return JSON.parse(text); }
-  catch {
-    const m = text.match(/\{[\s\S]*\}/);
-    return m ? JSON.parse(m[0]) : null;
+  const rawData: any = await r.json();
+  const rawText = rawData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+  // Strip markdown code fences if present (```json ... ```)
+  let cleaned = rawText.trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```\s*$/, '')
+    .trim();
+
+  // Find first { ... last } so we tolerate prefix/suffix prose
+  const firstBrace = cleaned.indexOf('{');
+  const lastBrace = cleaned.lastIndexOf('}');
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
   }
+
+  let json: any = null;
+  try { json = JSON.parse(cleaned); } catch {}
+  return { json, rawText, rawData };
 }
 
 function isAcceptable(json: any): boolean {
@@ -135,9 +147,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Up to 2 attempts. Second uses a stronger prompt + higher temperature.
     let json: any = null;
     let lastReason = '';
+    let lastRawText = '';
+    let lastRawData: any = null;
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
-        const candidate = await callGemini(tool, attempt);
+        const { json: candidate, rawText, rawData } = await callGemini(tool, attempt);
+        lastRawText = rawText;
+        lastRawData = rawData;
         if (isAcceptable(candidate)) {
           json = candidate;
           break;
@@ -145,7 +161,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         lastReason = !candidate ? 'null parse' :
           (candidate.description?.length || 0) < 80 ? `desc=${candidate.description?.length || 0}<80` :
           'too few structured fields';
-        console.warn(`[enrich-on-demand] attempt ${attempt} for ${slug} rejected (${lastReason})`);
+        console.warn(`[enrich-on-demand] attempt ${attempt} for ${slug} rejected (${lastReason})  rawTextLen=${rawText.length}`);
       } catch (e: any) {
         lastReason = e.message;
         console.warn(`[enrich-on-demand] attempt ${attempt} threw for ${slug}: ${e.message}`);
@@ -153,7 +169,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (!json) {
-      return res.status(200).json({ tool, cached: false, enriched: false, reason: lastReason });
+      // Include diagnostic info for debugging — will be removed once stable
+      return res.status(200).json({
+        tool, cached: false, enriched: false, reason: lastReason,
+        rawSample: lastRawText.slice(0, 500),
+        finishReason: lastRawData?.candidates?.[0]?.finishReason,
+        promptFeedback: lastRawData?.promptFeedback,
+      });
     }
 
     // Build the update payload. We OVERWRITE description if the existing one is
