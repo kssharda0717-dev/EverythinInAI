@@ -7,6 +7,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { config } = require('./config');
 const { createLogger } = require('../utils/logger');
 const { enrichTool } = require('../utils/enricher');
+const { isLiveUrl } = require('../utils/url_validator');
 
 const log = createLogger('database');
 
@@ -310,9 +311,22 @@ async function insertTool(tool) {
     homepage: tool.homepage || '',
     language: tool.language || '',
     topics: Array.isArray(tool.topics) ? tool.topics : [],
-    published_at: tool.published_at || new Date().toISOString(),
+     published_at: tool.published_at || new Date().toISOString(),
     run_id: tool.run_id || '',
   };
+
+  // Validate homepage URL is alive before insert (strips dead Heroku/DigitalOcean previews etc.)
+  if (record.homepage) {
+    try {
+      const check = await isLiveUrl(record.homepage, { strict: true });
+      if (!check.ok) {
+        log.debug(`Dead homepage stripped from ${record.name}: ${record.homepage} (${check.status})`);
+        record.homepage = '';
+      } else if (check.finalUrl && check.finalUrl !== record.homepage) {
+        record.homepage = check.finalUrl;     // follow redirects
+      }
+    } catch (e) { record.homepage = ''; }
+  }
 
   // Auto-enrich (Gemini) to populate use_cases / key_features / pros / cons / etc.
   // Silent-fail on  tool still gets inserted even if enrich misses.error 

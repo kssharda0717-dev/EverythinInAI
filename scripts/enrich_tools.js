@@ -27,6 +27,7 @@ const axios = require('axios');
 const dbModule = require('../engine/core/database');
 const { config } = require('../engine/core/config');
 const { createLogger } = require('../engine/utils/logger');
+const { isLiveUrl } = require('../engine/utils/url_validator');
 
 const log = createLogger('enrich');
 
@@ -154,13 +155,19 @@ async function main() {
     const t = data[i];
     const update = {};
 
-    // 1. Homepage from GitHub
+    // 1. Homepage from GitHub — validated to be a live URL before saving
     if (!t.homepage && t.url && t.url.includes('github.com')) {
       try {
         const hp = await extractHomepageFromGithub(t.url);
         if (hp) {
-          update.homepage = hp;
-          homeUpdated++;
+          // HEAD-check: is this URL actually alive?
+          const check = await isLiveUrl(hp, { strict: true });
+          if (check.ok) {
+            update.homepage = check.finalUrl || hp;
+            homeUpdated++;
+          } else {
+            log.warn(`  homepage skipped (dead) ${t.slug} — ${hp} (${check.status})`);
+          }
         }
       } catch {}
     }
