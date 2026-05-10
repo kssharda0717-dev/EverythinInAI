@@ -85,46 +85,46 @@ class ArxivCollector extends BaseCollector {
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   }
 
-  async collect(sinceTimestamp) {
+    async collect(sinceTimestamp) {
     const items = [];
-    const sinceMs = (sinceTimestamp || 0) * 1000;
-
+    // Use the proper arXiv /api/query endpoint which actually returns results.
+    // RSS endpoints are unreliable; this returns Atom-formatted results.
     for (const cat of this.categories) {
       try {
-        // Use HTTPS (arxiv now redirects HTTP) — the redirect was killing some retries.
-        const url = `https://export.arxiv.org/rss/${cat}`;
+        const url = `https://export.arxiv.org/api/query?search_query=cat:${cat}&start=0&max_results=50&sortBy=submittedDate&sortOrder=descending`;
         const xmlText = await this.fetchWithRetry(url, { responseType: 'text' });
         const parsed = this.parser.parse(typeof xmlText === 'string' ? xmlText : '');
-        // arxiv RSS structure: try all known shapes
-        const channel = parsed?.['rdf:RDF']?.item || parsed?.rss?.channel?.item || parsed?.feed?.entry || [];
-        const list = Array.isArray(channel) ? channel : [channel].filter(Boolean);
+        const entries = parsed?.feed?.entry || [];
+        const list = Array.isArray(entries) ? entries : [entries].filter(Boolean);
         let added = 0;
-        let skippedByDate = 0;
+        let skippedNonTool = 0;
         for (const entry of list) {
-          if (!entry?.title || !entry?.link) continue;
-          // arxiv recently changed published date field — try multiple keys
-          const dateStr = entry['dc:date'] || entry.published || entry.pubDate || entry.updated;
-          const pubMs = dateStr ? Date.parse(dateStr) : Date.now();
-          // Be permissive on date filter for arxiv (RSS feed is always recent anyway)
-          if (sinceMs && pubMs && pubMs < sinceMs - (7 * 86400000)) {  // 7-day grace window
-            skippedByDate++;
-            continue;
-          }
-
+          if (!entry?.title || !entry?.id) continue;
+          const link = String(entry.id || '').replace('http://', 'https://');
+          const summary = this._stripHtml(entry.summary || '').substring(0, 500);
+          const titleStr = String(entry.title).replace(/\s+/g, ' ').trim();
+          // Quality gate: only keep papers that mention code/tool/release/repo
+          // This filters out pure-theory papers that won't be usable as "tools"
+          const hasCodeSignal = /github\.com|huggingface\.co|code|implementation|release|open[- ]source|\btool\b|\bframework\b|\blibrary\b|\bsdk\b/i.test(titleStr + ' ' + summary);
+          if (!hasCodeSignal) { skippedNonTool++; continue; }
+          const authorList = Array.isArray(entry.author) ? entry.author : [entry.author].filter(Boolean);
+          const authorName = authorList[0]?.name || '';
+          const pubStr = entry.published || entry.updated;
+          const pubMs = pubStr ? Date.parse(pubStr) : Date.now();
           items.push(this.createItem({
-            title: String(entry.title).replace(/\s*\(arXiv:[^)]+\)\s*$/, '').trim(),
-            description: this._stripHtml(entry.description || '').substring(0, 500),
-            url: entry.link,
+            title: titleStr,
+            description: summary,
+            url: link,
             source: `arxiv:${cat}`,
-            source_url: entry.link,
+            source_url: link,
             upvotes: 0,
-            author: entry['dc:creator'] || '',
+            author: authorName,
             published_at: new Date(pubMs).toISOString(),
           }));
           added++;
         }
-        this.log.info(`  ${cat}: ${added} papers${skippedByDate ? ` (skipped ${skippedByDate} by date)` : ''}`);
-        await this._sleep(500);
+        this.log.info(`  ${cat}: ${added} papers (skipped ${skippedNonTool} non-tool theoretical)`);
+        await this._sleep(800);
       } catch (err) {
         this.log.error(`  arxiv ${cat} FAILED: ${err.message}`);
       }
@@ -209,17 +209,18 @@ class HuggingFaceCollector extends BaseCollector {
 class AILabBlogsCollector extends BaseCollector {
   constructor() {
     super('ai_lab_blogs');
+    // Curated AI lab blog feeds. Most labs killed their public RSS in 2025.
+    // We keep only verified-working direct RSS endpoints.
+    // Anthropic/Meta/Mistral RSS are dead industry-wide; we accept the reduced
+    // coverage rather than depend on flaky RSSHub public instances.
     this.feeds = [
-      { name: 'OpenAI',          url: 'https://openai.com/blog/rss.xml' },
-      // Anthropic killed RSS in 2025; switched to atom feed at /atom.xml
-      { name: 'Anthropic News',  url: 'https://www.anthropic.com/atom.xml' },
-      { name: 'Google Research', url: 'https://research.google/blog/rss/' },
-      { name: 'DeepMind',        url: 'https://deepmind.google/blog/rss.xml' },
-      // Meta AI moved their feed; new URL
-      { name: 'Meta AI',         url: 'https://ai.meta.com/blog/feed/' },
-      // Bonus: Mistral + Cohere blogs
-      { name: 'Mistral',         url: 'https://mistral.ai/news/feed.xml' },
-      { name: 'Cohere',          url: 'https://cohere.com/blog/rss.xml' },
+      { name: 'OpenAI',           url: 'https://openai.com/blog/rss.xml' },
+      { name: 'Google Research',  url: 'https://research.google/blog/rss/' },
+      { name: 'DeepMind',         url: 'https://deepmind.google/blog/rss.xml' },
+      // Working alternative high-signal AI feeds:
+      { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml' },
+      { name: 'Stability AI Blog', url: 'https://stability.ai/blog?format=rss' },
+      { name: 'BAIR Berkeley AI', url: 'https://bair.berkeley.edu/blog/feed.xml' },
     ];
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   }
@@ -276,51 +277,57 @@ class AILabBlogsCollector extends BaseCollector {
 
 // ─── 5. PRODUCT HUNT (replaces dead RSS feed in original) ────────────────────
 class ProductHuntCollector extends BaseCollector {
+  // NOTE: ProductHunt killed all public RSS feeds in 2025. Their GraphQL API
+  // requires auth tokens. Rather than maintain a broken collector, we keep
+  // the class name (so registry doesn't break) but route it to the
+  // Replicate Explore API instead, which returns 50 trending public AI models
+  // per call and is a much higher-quality signal than PH ever was.
   constructor() {
-    super('producthunt');
-    this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+    super('replicate_explore');
   }
-
-  async collect(sinceTimestamp) {
+  async collect() {
     const items = [];
     try {
-      // Public RSS — no API key needed
-      const xmlText = await this.fetchWithRetry(
-        // ProductHunt killed the public RSS for category filters in 2025.
-        // Switched to the official sitewide feed which still includes AI launches.
-        'https://www.producthunt.com/feed',
-        { responseType: 'text', headers: { 'User-Agent': 'Mozilla/5.0 EverythinInAI/1.0' } },
-      );
-      const parsed = this.parser.parse(typeof xmlText === 'string' ? xmlText : '');
-      const entries = parsed?.rss?.channel?.item || [];
-      const list = Array.isArray(entries) ? entries : [entries].filter(Boolean);
-
-      const sinceMs = (sinceTimestamp || 0) * 1000;
-      for (const e of list) {
-        if (!e?.title || !e?.link) continue;
-        const pubMs = e.pubDate ? Date.parse(e.pubDate) : Date.now();
-        if (sinceMs && pubMs < sinceMs) continue;
-
-        items.push(this.createItem({
-          title: e.title,
-          description: this._stripHtml(e.description || '').substring(0, 500),
-          url: e.link,
-          source: 'producthunt',
-          source_url: e.link,
-          upvotes: 0,
-          author: e['dc:creator'] || '',
-          published_at: new Date(pubMs).toISOString(),
-        }));
+      // Replicate's public models endpoint. Requires REPLICATE_API_TOKEN from .env.
+      const token = process.env.REPLICATE_API_TOKEN || '';
+      if (!token) {
+        this.log.warn('REPLICATE_API_TOKEN not set; skipping Replicate Explore');
+        return [];
       }
-      this.log.info(`Total ProductHunt items: ${items.length}`);
+      const data = await this.fetchWithRetry(
+        'https://api.replicate.com/v1/models',
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'User-Agent': 'EverythinInAI/1.0',
+            'Accept': 'application/json',
+          },
+        },
+      );
+      const models = data?.results || [];
+      let added = 0;
+      for (const m of models) {
+        if (!m?.url) continue;
+        const fullName = `${m.owner}/${m.name}`;
+        items.push(this.createItem({
+          title: fullName,
+          description: (m.description || `${m.cover_image_url ? 'Visual AI model. ' : ''}Run count: ${m.run_count || 0}.`).substring(0, 500),
+          url: m.url,
+          source: 'replicate',
+          source_url: m.url,
+          upvotes: m.run_count || 0,
+          author: m.owner,
+          homepage: m.github_url || m.paper_url || '',
+          published_at: m.created_at || new Date().toISOString(),
+        }));
+        added++;
+      }
+      this.log.info(`  Replicate: ${added} models`);
     } catch (err) {
-      this.log.error(`ProductHunt FAILED: ${err.message}`);
+      this.log.error(`  Replicate FAILED: ${err.message}`);
     }
+    this.log.info(`Total ProductHunt/Replicate items: ${items.length}`);
     return items;
-  }
-
-  _stripHtml(s) {
-    return String(s).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
   }
 }
 

@@ -143,6 +143,72 @@ const HARD_BLACKLIST_PATTERNS = [
   /play\.google\.com\/store\//i,
   /chrome\.google\.com\/webstore\//i,
   /chromewebstore\.google\.com\//i,
+
+  // ── v5 ADDITIONS (May 2026 hardening, after enabling Reddit/HF/ArXiv/Replicate) ──
+  // Reddit image hosts (memes / screenshots / not products)
+  /i\.redd\.it\//i,
+  /preview\.redd\.it\//i,
+  /v\.redd\.it\//i,
+  /imgur\.com\//i,
+  /i\.imgur\.com\//i,
+  /pbs\.twimg\.com\//i,
+  /scontent[^/]*\.fbcdn\.net\//i,
+
+  // ArXiv abstract listing pages (we want the actual paper or project page)
+  /arxiv\.org\/list\//i,
+
+  // GitHub low-signal repos (dotfiles, configs, awesome-X lists, learning notes)
+  /github\.com\/[^/]+\/dotfiles?(\/|$)/i,
+  /github\.com\/[^/]+\/(my-)?config(s)?(\/|$)/i,
+  /github\.com\/[^/]+\/notes?(\/|$)/i,
+  /github\.com\/[^/]+\/learning(\/|$)/i,
+  /github\.com\/[^/]+\/playground(\/|$)/i,
+  /github\.com\/[^/]+\/awesome-/i,
+  /github\.com\/[^/]+\/(homework|coursework|hw|assignment|tutorial|practice)(\/|$)/i,
+
+  // Replicate test/demo private models
+  /replicate\.com\/[^/]+\/(test|demo|temp|tmp|sandbox|playground)/i,
+
+  // Course pages, university syllabi (educational content, not tools)
+  /coursera\.org\//i,
+  /udemy\.com\//i,
+  /edx\.org\//i,
+  /udacity\.com\//i,
+  /\.edu\/courses?\//i,
+
+  // Generic Reddit subreddit landing (we want individual links, not the sub itself)
+  /^https?:\/\/(www\.)?reddit\.com\/r\/[^/]+\/?$/i,
+
+  // Direct PDF / archive downloads (we need the project landing page, not the binary)
+  /\.(pdf|ps|tar\.gz|tgz|zip|rar|7z)$/i,
+
+  // Job board posts (definitely not tools)
+  /jobs\.lever\.co\//i,
+  /greenhouse\.io\/[^/]+\/jobs\//i,
+  /workday\.com\//i,
+  /careers\.[^/]+\.[^/]+\/[^/]+\/job/i,
+
+  // Crypto / NFT marketplaces (off-topic)
+  /opensea\.io\//i,
+  /etherscan\.io\//i,
+  /coinbase\.com\/(price|earn)\//i,
+
+  // E-commerce reseller pages
+  /amazon\.[a-z.]+\/[^/]+\/dp\//i,
+  /ebay\.com\/itm\//i,
+
+  // Patreon / OnlyFans / Ko-fi (creator subscription pages, not products)
+  /patreon\.com\/[^/]+$/i,
+  /onlyfans\.com\//i,
+  /ko-fi\.com\//i,
+  /buymeacoffee\.com\//i,
+
+  // Wikipedia (encyclopedia entries are not tools)
+  /wikipedia\.org\/wiki\//i,
+
+  // Reddit user profiles (definitely not tools)
+  /reddit\.com\/user\//i,
+  /reddit\.com\/u\//i,
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════════

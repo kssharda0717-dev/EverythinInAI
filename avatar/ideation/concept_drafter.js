@@ -70,26 +70,26 @@ REQUIREMENTS:
 
 2. For each concept, return:
    - title: a working title (max 60 chars) — internal use
-   - hook: 1 sentence, max 14 words, MUST stop the scroll. No "Hey guys", no "Did you know".
-   - body_script: 3-4 short sentences delivering the substance. Conversational, Avi's voice. ~15-20 seconds at natural pace (~45-60 words).
-   - punchline: 1 sharp closing line + a soft CTA. ~5-8 seconds.
+   - hook: 1-2 short punchy sentences (max 15 words). MUST stop the scroll using pattern-interrupt. Start mid-thought. No "Hey guys", no "Did you know". Example: "They just killed the most important feature." or "I've been using this wrong for 6 months."
+   - body_script: 3-4 short sentences delivering the substance. Conversational, Rhea's voice. ~15-20 seconds at natural pace (~45-60 words).
+   - punchline: The "Open Loop" ending. Do NOT summarize or wrap up neatly. End on a cliffhanger, a controversial take, or an unfinished thought that forces them to rewatch or comment to get the answer. Then append the DM-funnel CTA. ~5-8 seconds.
    - full_script: the concatenation of hook + body_script + punchline (used for TTS).
    - estimated_seconds: integer, target 28-35.
    - keyframes: array of 4 objects, each = {idx, prompt, scene_caption, duration_ms}. The "prompt" is a SCENE description (not Avi's appearance — that's locked elsewhere). The "scene_caption" is the on-screen subtitle text shown during this keyframe (max 8 words). Sum of duration_ms must roughly equal estimated_seconds * 1000.
    - caption: Instagram caption, 3-5 lines, hook-style opening, soft CTA at end. Max 220 chars. Use 0-2 emojis only if purposeful (✨ 🌿 💭 ⚡ never 😍 🥰).
    - hashtags: array of 8-12 hashtags. Mix of high-volume (#AI #Tech) and niche (#${(signal.entities[0] || 'AI').replace(/\s+/g, '')}).
-   - cta: a short call-to-action like "comment LINK", "save for later", "follow @avi.in.ai".
+   - cta: a short call-to-action like "comment LINK", "save for later", "follow @rhea.builds".
    - lure_level: integer matching today's lure level (${lureLevel}).
    - angle: one of "hot_take" / "explainer" / "humor" / "reaction".
 
 3. Each concept must be DIFFERENT in tone — not just rewording.
 
-5. STRICTLY follow Avi's voice rules from the system prompt above. No banned phrases.
+5. STRICTLY follow Rhea's voice rules from the system prompt above. No banned phrases.
 
 6. CRITICAL CTA RULES — the punchline AND the caption MUST end with one of these DM-funnel CTAs (pick the most natural):
    - "Comment LINK and I'll DM you the repo"
    - "Comment GUIDE and I'll DM you the breakdown"
-   - "Comment AVI and I'll DM you my notes on this"
+   - "Comment RHEA and I'll DM you my notes on this"
    - "Comment YES and I'll DM you the demo"
    The CTA MUST direct viewers to comment a specific keyword to get a DM. NEVER use:
    - "What do you think" / "Let me know" / "Drop your thoughts"
