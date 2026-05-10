@@ -231,36 +231,17 @@ async function main() {
 
   const filter = buildKenBurnsFilter(keyframes.length, perImageDur, transitionDur);
 
-  // 5. Watermark + brand outro via ASS
-  const subPath = path.join(workDir, 'overlay.ass');
-  const ass = `[Script Info]
-ScriptType: v4.00+
-PlayResX: ${W}
-PlayResY: ${H}
-ScaledBorderAndShadow: yes
-
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Watermark,Montserrat,32,&HB0FFFFFF,&H000000FF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,2,2,9,30,30,30,1
-Style: Outro,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,6,3,2,80,80,180,1
-
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:00:${TOTAL_DURATION.toFixed(2)},Watermark,,0,0,0,,@avi.in.ai
-Dialogue: 0,0:00:${(TOTAL_DURATION - 2.5).toFixed(2)},0:00:${TOTAL_DURATION.toFixed(2)},Outro,,0,0,0,,{\\fad(300,200)\\an2}EVERYTHININAI.COM
-`;
-  fs.writeFileSync(subPath, ass);
-
-  const escapedSub = subPath.replace(/\\/g, '/').replace(/:/g, '\\:');
+  // 5. Clean output — NO watermark, NO outro (premium aesthetic).
+  //    Branding lives in the IG caption + handle, not burned into the pixels.
   const outputMp4 = path.join(workDir, 'final.mp4');
 
-  // ffmpeg: 4 image inputs + 1 music input + complex filter + ASS burn
+  // ffmpeg: 4 image inputs + 1 music input + Ken Burns filter (no overlay text)
   const args2 = [
     '-y',
     ...localImages.flatMap(p => ['-loop', '1', '-t', String(perImageDur + 1), '-i', p]),
     '-stream_loop', '-1', '-i', musicPath,
-    '-filter_complex', filter + `;[vout]ass=${escapedSub}[vfinal];[${keyframes.length}:a]volume=0.55,atrim=0:${TOTAL_DURATION},afade=t=in:st=0:d=1.5,afade=t=out:st=${TOTAL_DURATION - 2}:d=2[abed]`,
-    '-map', '[vfinal]',
+    '-filter_complex', filter + `;[${keyframes.length}:a]volume=0.55,atrim=0:${TOTAL_DURATION},afade=t=in:st=0:d=1.5,afade=t=out:st=${TOTAL_DURATION - 2}:d=2[abed]`,
+    '-map', '[vout]',
     '-map', '[abed]',
     '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
     '-pix_fmt', 'yuv420p',

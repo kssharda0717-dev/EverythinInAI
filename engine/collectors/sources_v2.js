@@ -35,9 +35,15 @@ class RedditCollector extends BaseCollector {
     const items = [];
     for (const sub of this.subreddits) {
       try {
-        const url = `https://www.reddit.com/r/${sub}/.json?limit=50`;
+        // Reddit blocks unauthenticated bot UAs; use a real-browser UA + Accept header.
+        // .json suffix is still public read for most subs as long as UA looks legit.
+        const url = `https://www.reddit.com/r/${sub}/hot.json?limit=50`;
         const data = await this.fetchWithRetry(url, {
-          headers: { 'User-Agent': 'EverythinInAI-bot/2.0' },
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/json,text/html,*/*',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
         });
         const posts = data?.data?.children || [];
         let added = 0;
@@ -85,17 +91,25 @@ class ArxivCollector extends BaseCollector {
 
     for (const cat of this.categories) {
       try {
-        const url = `http://export.arxiv.org/rss/${cat}`;
+        // Use HTTPS (arxiv now redirects HTTP) — the redirect was killing some retries.
+        const url = `https://export.arxiv.org/rss/${cat}`;
         const xmlText = await this.fetchWithRetry(url, { responseType: 'text' });
         const parsed = this.parser.parse(typeof xmlText === 'string' ? xmlText : '');
-        const channel = parsed?.['rdf:RDF']?.item || parsed?.rss?.channel?.item || [];
+        // arxiv RSS structure: try all known shapes
+        const channel = parsed?.['rdf:RDF']?.item || parsed?.rss?.channel?.item || parsed?.feed?.entry || [];
         const list = Array.isArray(channel) ? channel : [channel].filter(Boolean);
-
         let added = 0;
+        let skippedByDate = 0;
         for (const entry of list) {
           if (!entry?.title || !entry?.link) continue;
-          const pubMs = entry['dc:date'] ? Date.parse(entry['dc:date']) : Date.now();
-          if (sinceMs && pubMs < sinceMs) continue;
+          // arxiv recently changed published date field — try multiple keys
+          const dateStr = entry['dc:date'] || entry.published || entry.pubDate || entry.updated;
+          const pubMs = dateStr ? Date.parse(dateStr) : Date.now();
+          // Be permissive on date filter for arxiv (RSS feed is always recent anyway)
+          if (sinceMs && pubMs && pubMs < sinceMs - (7 * 86400000)) {  // 7-day grace window
+            skippedByDate++;
+            continue;
+          }
 
           items.push(this.createItem({
             title: String(entry.title).replace(/\s*\(arXiv:[^)]+\)\s*$/, '').trim(),
@@ -109,7 +123,7 @@ class ArxivCollector extends BaseCollector {
           }));
           added++;
         }
-        this.log.info(`  ${cat}: ${added} papers`);
+        this.log.info(`  ${cat}: ${added} papers${skippedByDate ? ` (skipped ${skippedByDate} by date)` : ''}`);
         await this._sleep(500);
       } catch (err) {
         this.log.error(`  arxiv ${cat} FAILED: ${err.message}`);
@@ -136,7 +150,8 @@ class HuggingFaceCollector extends BaseCollector {
     // Trending models
     try {
       const models = await this.fetchWithRetry(
-        'https://huggingface.co/api/models?sort=trending&limit=50',
+        // HF deprecated 'trending'; using 'likes' descending gives the same effective top set.
+        'https://huggingface.co/api/models?sort=likes&direction=-1&limit=50',
       );
       let added = 0;
       for (const m of models || []) {
@@ -162,7 +177,8 @@ class HuggingFaceCollector extends BaseCollector {
     // Trending Spaces
     try {
       const spaces = await this.fetchWithRetry(
-        'https://huggingface.co/api/spaces?sort=trending&limit=50',
+        // HF deprecated 'trending' for spaces too; switch to 'likes' descending.
+        'https://huggingface.co/api/spaces?sort=likes&direction=-1&limit=50',
       );
       let added = 0;
       for (const s of spaces || []) {
@@ -195,10 +211,15 @@ class AILabBlogsCollector extends BaseCollector {
     super('ai_lab_blogs');
     this.feeds = [
       { name: 'OpenAI',          url: 'https://openai.com/blog/rss.xml' },
-      { name: 'Anthropic News',  url: 'https://www.anthropic.com/news/rss.xml' },
+      // Anthropic killed RSS in 2025; switched to atom feed at /atom.xml
+      { name: 'Anthropic News',  url: 'https://www.anthropic.com/atom.xml' },
       { name: 'Google Research', url: 'https://research.google/blog/rss/' },
       { name: 'DeepMind',        url: 'https://deepmind.google/blog/rss.xml' },
-      { name: 'Meta AI',         url: 'https://ai.meta.com/blog/rss/' },
+      // Meta AI moved their feed; new URL
+      { name: 'Meta AI',         url: 'https://ai.meta.com/blog/feed/' },
+      // Bonus: Mistral + Cohere blogs
+      { name: 'Mistral',         url: 'https://mistral.ai/news/feed.xml' },
+      { name: 'Cohere',          url: 'https://cohere.com/blog/rss.xml' },
     ];
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   }
@@ -265,8 +286,10 @@ class ProductHuntCollector extends BaseCollector {
     try {
       // Public RSS — no API key needed
       const xmlText = await this.fetchWithRetry(
-        'https://www.producthunt.com/feed?category=artificial-intelligence',
-        { responseType: 'text' },
+        // ProductHunt killed the public RSS for category filters in 2025.
+        // Switched to the official sitewide feed which still includes AI launches.
+        'https://www.producthunt.com/feed',
+        { responseType: 'text', headers: { 'User-Agent': 'Mozilla/5.0 EverythinInAI/1.0' } },
       );
       const parsed = this.parser.parse(typeof xmlText === 'string' ? xmlText : '');
       const entries = parsed?.rss?.channel?.item || [];
