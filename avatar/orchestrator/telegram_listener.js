@@ -6,6 +6,8 @@
  *   /pick_<8-char-id>     — user picks a tech-reel concept
  *   /go                   — user manually fires today's calendar (lure/lifestyle)
  *   /status               — print today's calendar + state
+ *   /stats_<id> v=N w=N.N — log Instagram performance for a reel (views + watch time)
+ *   /perf                 — view ranked framework performance from last 30 days
  *   /help                 — list commands
  *
  * On a successful /pick:
@@ -256,6 +258,10 @@ async function poll() {
         await handleStatus(chatId);
       } else if (text === '/go') {
         await handleGo(chatId);
+      } else if (text === '/perf') {
+        await handlePerf(chatId);
+      } else if (text.startsWith('/stats_') || text.startsWith('/stats ')) {
+        await handleStats(chatId, text);
       } else if (text.startsWith('/pick_')) {
         const idPrefix = text.replace('/pick_', '').trim();
         if (idPrefix.length < 4) {
@@ -270,6 +276,150 @@ async function poll() {
     await new Promise(r => setTimeout(r, 5000));
   }
   setImmediate(poll);
+}
+
+// ===== Analytics Feedback Loop Handlers =====
+
+/**
+ * /stats_<id-prefix> v=<views> w=<avg_watch_sec> [l=<likes>] [c=<comments>] [s=<shares>] [sv=<saves>] [f=<followers_gained>]
+ * Example: /stats_f6c7c97b v=109 w=3.5 l=4 c=2
+ * This logs Instagram performance for a specific reel into reel_performance.
+ */
+async function handleStats(chatId, text) {
+  const db = dbModule.getClient();
+
+  // Parse the command. Accept /stats_<id> tokens... or /stats <id> tokens...
+  const tokens = text.replace(/^\/stats[_ ]/, '').trim().split(/\s+/);
+  if (tokens.length < 2) {
+    await reply(chatId,
+      '❌ Usage: `/stats_<concept-id> v=<views> w=<watch_sec>`\n' +
+      '\nOptional fields: `l=<likes> c=<comments> s=<shares> sv=<saves> f=<followers_gained>`\n' +
+      '\nExample: `/stats_f6c7c97b v=109 w=3.5 l=4 c=2`'
+    );
+    return;
+  }
+
+  const idPrefix = tokens.shift();
+  const params = {};
+  for (const t of tokens) {
+    const [k, v] = t.split('=');
+    if (k && v !== undefined) params[k.trim()] = v.trim();
+  }
+
+  if (!params.v || !params.w) {
+    await reply(chatId, '❌ Missing required fields. Need at least `v=<views>` and `w=<watch_sec>`.');
+    return;
+  }
+
+  // Find the concept by id prefix
+  const { data: concepts } = await db.from('reel_concepts')
+    .select('id, title, angle, estimated_seconds, video_url')
+    .ilike('id', `${idPrefix}%`)
+    .limit(2);
+  if (!concepts || concepts.length === 0) {
+    await reply(chatId, `❌ No reel concept found with id starting with \`${idPrefix}\`.`);
+    return;
+  }
+  if (concepts.length > 1) {
+    await reply(chatId, `❌ Multiple concepts match \`${idPrefix}\`. Use a longer prefix.`);
+    return;
+  }
+  const concept = concepts[0];
+
+  // Insert into reel_performance
+  const record = {
+    concept_id: concept.id,
+    framework: concept.angle || 'unknown',
+    views: parseInt(params.v, 10) || 0,
+    avg_watch_sec: parseFloat(params.w) || 0,
+    reel_duration: concept.estimated_seconds || null,
+    likes: parseInt(params.l, 10) || 0,
+    comments: parseInt(params.c, 10) || 0,
+    shares: parseInt(params.s, 10) || 0,
+    saves: parseInt(params.sv, 10) || 0,
+    followers_gained: parseInt(params.f, 10) || 0,
+    recorded_at: new Date().toISOString(),
+  };
+
+  const { error } = await db.from('reel_performance').insert(record);
+  if (error) {
+    await reply(chatId, `❌ DB error: ${error.message}`);
+    return;
+  }
+
+  // Compute retention pct for the reply
+  const retention = record.reel_duration > 0
+    ? Math.min(100, (record.avg_watch_sec / record.reel_duration) * 100).toFixed(1)
+    : '?';
+
+  await reply(chatId,
+    `✅ *Performance Logged*\n\n` +
+    `Reel: ${concept.title}\n` +
+    `Framework: \`${record.framework}\`\n` +
+    `Views: ${record.views}\n` +
+    `Avg Watch: ${record.avg_watch_sec}s\n` +
+    `Retention: ${retention}%\n` +
+    `Likes/Comments/Shares/Saves: ${record.likes}/${record.comments}/${record.shares}/${record.saves}\n\n` +
+    `_The LLM will use this data in its next ideation cycle to favor high-performing frameworks._`
+  );
+}
+
+/**
+ * /perf — show ranked framework performance from the last 30 days
+ */
+async function handlePerf(chatId) {
+  const db = dbModule.getClient();
+  const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+
+  const { data: rows, error } = await db.from('reel_performance')
+    .select('framework, views, avg_watch_sec, retention_pct, likes, shares, saves')
+    .gte('recorded_at', thirtyDaysAgo);
+
+  if (error) {
+    await reply(chatId, `❌ DB error: ${error.message}`);
+    return;
+  }
+
+  if (!rows || rows.length === 0) {
+    await reply(chatId,
+      '_No performance data yet._\n\n' +
+      'Log your first reel with `/stats_<id> v=<views> w=<watch_sec>`'
+    );
+    return;
+  }
+
+  // Aggregate by framework
+  const agg = {};
+  for (const r of rows) {
+    const f = r.framework || 'unknown';
+    if (!agg[f]) agg[f] = { count: 0, views: 0, watch: 0, retention: 0, eng: 0 };
+    agg[f].count++;
+    agg[f].views += r.views || 0;
+    agg[f].watch += parseFloat(r.avg_watch_sec) || 0;
+    agg[f].retention += parseFloat(r.retention_pct) || 0;
+    agg[f].eng += (r.likes || 0) + (r.shares || 0) + (r.saves || 0);
+  }
+
+  // Sort by avg retention
+  const ranked = Object.entries(agg)
+    .map(([f, a]) => ({
+      framework: f,
+      reels: a.count,
+      avgViews: Math.round(a.views / a.count),
+      avgWatch: (a.watch / a.count).toFixed(1),
+      avgRetention: (a.retention / a.count).toFixed(1),
+      totalEng: a.eng,
+    }))
+    .sort((a, b) => parseFloat(b.avgRetention) - parseFloat(a.avgRetention));
+
+  let msg = `📊 *Framework Performance (last 30 days)*\n\n`;
+  for (const r of ranked) {
+    msg += `*${r.framework}*  (×${r.reels})\n` +
+           `  → ${r.avgViews} views · ${r.avgWatch}s watch · ${r.avgRetention}% retention\n` +
+           `  → ${r.totalEng} total engagement\n\n`;
+  }
+  msg += `_Best framework will be favored in next ideation._`;
+  await reply(chatId, msg);
 }
 
 log.info('🤖 Telegram listener daemon starting...');

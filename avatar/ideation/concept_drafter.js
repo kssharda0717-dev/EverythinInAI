@@ -39,9 +39,24 @@ function parseJSON(rawText) {
   throw new Error(`Could not parse Gemini JSON. First 500 chars: ${rawText.substring(0, 500)}`);
 }
 
-function buildPrompt(persona, signal, lureLevel) {
-  return `${persona.system_prompt}
+function buildPrompt(persona, signal, lureLevel, perfStats = null) {
+  let perfBlock = '';
+  if (perfStats && perfStats.length > 0) {
+    perfBlock = `
+═══════════════════════════════════════════════════════════════
+ANALYTICS FEEDBACK (LAST 30 DAYS):
+The following frameworks have been tested on Instagram. 
+Ranked by Average Retention Rate (higher is better):
+${perfStats.map(s => `- ${s.framework}: ${s.avgRetention}% retention (Avg Watch: ${s.avgWatch}s, Views: ${s.avgViews})`).join('\n')}
 
+INSTRUCTION: Heavily favor the frameworks with the highest retention rate. 
+If a framework has < 30% retention, DO NOT use it today.
+═══════════════════════════════════════════════════════════════
+`;
+  }
+
+  return `${persona.system_prompt}
+${perfBlock}
 ═══════════════════════════════════════════════════════════════
 TASK: Draft 3 distinct Reel concepts for the following signal.
 ═══════════════════════════════════════════════════════════════
@@ -110,9 +125,44 @@ OUTPUT SCHEMA:
 }`;
 }
 
+async function getPerformanceStats() {
+  try {
+    const db = require('../../engine/core/database').getClient();
+    const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    const { data: rows } = await db.from('reel_performance')
+      .select('framework, views, avg_watch_sec, retention_pct')
+      .gte('recorded_at', thirtyDaysAgo);
+    
+    if (!rows || rows.length === 0) return null;
+
+    const agg = {};
+    for (const r of rows) {
+      const f = r.framework || 'unknown';
+      if (!agg[f]) agg[f] = { count: 0, views: 0, watch: 0, retention: 0 };
+      agg[f].count++;
+      agg[f].views += r.views || 0;
+      agg[f].watch += parseFloat(r.avg_watch_sec) || 0;
+      agg[f].retention += parseFloat(r.retention_pct) || 0;
+    }
+
+    return Object.entries(agg)
+      .map(([f, a]) => ({
+        framework: f,
+        avgViews: Math.round(a.views / a.count),
+        avgWatch: (a.watch / a.count).toFixed(1),
+        avgRetention: (a.retention / a.count).toFixed(1),
+      }))
+      .sort((a, b) => parseFloat(b.avgRetention) - parseFloat(a.avgRetention));
+  } catch (err) {
+    log.warn(`Failed to fetch performance stats: ${err.message}`);
+    return null;
+  }
+}
+
 async function draftConcepts(signal, lureLevel = 2, retries = 2) {
   const persona = await personaService.getActivePersona();
-  const prompt = buildPrompt(persona, signal, lureLevel);
+  const perfStats = await getPerformanceStats();
+  const prompt = buildPrompt(persona, signal, lureLevel, perfStats);
 
   const apiKey = config.gemini.apiKey;
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');
