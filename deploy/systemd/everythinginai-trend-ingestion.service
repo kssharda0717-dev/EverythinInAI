@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI — Weekly Trend Ingestion (format patterns)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/trends/trend_ingestion.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/trend_ingestion.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/trend_ingestion.log
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

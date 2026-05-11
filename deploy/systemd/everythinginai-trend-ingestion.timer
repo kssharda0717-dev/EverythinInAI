@@ -1,0 +1,10 @@
+[Unit]
+Description=EverythinInAI — Weekly Trend Ingestion Timer (runs Mondays at 06:00 UTC = 11:30 IST)
+Requires=everythinginai-trend-ingestion.service
+
+[Timer]
+OnCalendar=Mon *-*-* 06:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

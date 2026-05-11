@@ -39,7 +39,7 @@ function parseJSON(rawText) {
   throw new Error(`Could not parse Gemini JSON. First 500 chars: ${rawText.substring(0, 500)}`);
 }
 
-function buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType) {
+function buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel) {
   let perfBlock = '';
   if (perfStats && perfStats.length > 0) {
     perfBlock = `
@@ -53,6 +53,31 @@ STRATEGIST INSTRUCTIONS:
 1. If a framework has high retention (>30%) AND a good sample size (>=2), use it.
 2. If a framework has low retention (<15%) AND a good sample size (>=2), DO NOT use it.
 3. EXPLORE MODE: If a framework is NOT listed above, or has a sample size of 1, you MUST try it today to gather more data.
+═══════════════════════════════════════════════════════════════
+`;
+  }
+
+  let trendsBlock = '';
+  if (trends && trends.length > 0) {
+    trendsBlock = `
+═══════════════════════════════════════════════════════════════
+TRENDING FORMATS THIS WEEK ON INSTAGRAM (FOR YOUR STREAM):
+Incorporate these stylistic choices into your concepts to boost algorithmic reach:
+${trends.map(t => `- [${t.pattern_type.toUpperCase()}] ${t.pattern} (e.g., "${t.example}")`).join('\n')}
+═══════════════════════════════════════════════════════════════
+`;
+  }
+
+  let travelBlock = '';
+  if (streamType === 'lifestyle' && travel) {
+    travelBlock = `
+═══════════════════════════════════════════════════════════════
+RHEA'S CURRENT TRAVEL STATUS:
+Rhea is currently traveling! Set all lifestyle concepts in this location.
+Location: ${travel.location}
+Vibe: ${travel.vibe || 'adventure'}
+Planned Activities: ${(travel.planned_activities || []).join(', ')}
+Notes: ${travel.notes || 'none'}
 ═══════════════════════════════════════════════════════════════
 `;
   }
@@ -148,13 +173,20 @@ ${frameworksList}
 }`;
   }
 
-  return `${persona.system_prompt}
+  // Inject the rich Persona Bible if available, else fallback to system_prompt
+  const personaContext = persona.bible_md 
+    ? `You are writing content for the following persona:\n\n${persona.bible_md}\n\nBUSINESS GOAL: We are below 10k followers. Every reel must drive saves and follows aggressively. Every Friday lure post must tease the future subscription tier.`
+    : persona.system_prompt;
+
+  return `${personaContext}
 ${perfBlock}
+${trendsBlock}
+${travelBlock}
 ${taskBlock}
 
 Return ONLY valid JSON matching this schema:
 ${outputSchema}
-`;`;
+`;
 }
 
 async function getPerformanceStats() {
@@ -207,7 +239,26 @@ async function draftConcepts(signal, lureLevel = 2, streamType = 'tech', retries
     throw new Error(`No active frameworks found for stream: ${streamType}`);
   }
 
-  const prompt = buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType);
+  // Pull trending formats for this stream
+  const { data: trends } = await db.from('trending_formats')
+    .select('pattern_type, pattern, example')
+    .eq('stream', streamType)
+    .order('ingested_at', { ascending: false })
+    .limit(5);
+
+  // Pull travel calendar if applicable
+  let travel = null;
+  if (streamType === 'lifestyle') {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data: t } = await db.from('travel_calendar')
+      .select('*')
+      .lte('start_date', today)
+      .gte('end_date', today)
+      .maybeSingle();
+    travel = t;
+  }
+
+  const prompt = buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel);
 
   const apiKey = config.gemini.apiKey;
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');
