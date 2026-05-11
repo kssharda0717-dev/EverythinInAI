@@ -35,8 +35,14 @@ const MODELS = {
   // Lip-sync: turn one Avi portrait + voice WAV into a talking-head video
   // (legacy, looks robotic)
   sadtalker:    { id: 'lucataco/sadtalker',    version: '85c698db7c0a66d5011435d0191db323034e1da04b912a6d365833141b6a285b', cost_per_image: 0.10 },
-  // ByteDance OmniHuman — STATE-OF-THE-ART. Natural body/hands/background.
-  omni_human:   { id: 'bytedance/omni-human',  version: '566f1b03016969ac39e242c1ae4a39034686ca8850fc3dba83dceaceb96f74b2', cost_per_image: 0.50 },
+  // ByteDance OmniHuman — STATE-OF-THE-ART quality. EXPENSIVE: ~$3.33/30s reel.
+  omni_human:   { id: 'bytedance/omni-human',  version: '566f1b03016969ac39e242c1ae4a39034686ca8850fc3dba83dceaceb96f74b2', cost_per_image: 3.33 },
+  // Wan 2.2 Speech-to-Video — BEST VALUE for talking head. ~$0.60/30s reel (₹50).
+  // Takes a single portrait image + audio. High-quality realistic motion.
+  wan_2_2_s2v:  { id: 'wan-video/wan-2.2-s2v', version: '09607e6e761d2f015b0d740f938ec59199f54aa623384465a5054b230405acf4', cost_per_image: 0.60 },
+  // Kling v1.6 Standard — image-to-video with motion. $0.05/sec, 10 sec = $0.50.
+  // Used for weekend action lifestyle reels (gym, pilates, driving, etc.)
+  kling_v1_6_std: { id: 'kwaivgi/kling-v1.6-standard', version: 'e6f571e8d6990da3c96abf8d3082894024d652822f0ca3cd244acece84a1cc3e', cost_per_image: 0.50 },
 };
 
 // LoRA trainer — used once to create Avi's identity LoRA. Cost: ~$2-3 flat.

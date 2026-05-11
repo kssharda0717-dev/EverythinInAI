@@ -8,7 +8,7 @@
  * Produces:
  *   - Talking-head MP4 with Avi's lips synced to the audio
  *
- * Uses lucataco/sadtalker (~$0.10/Reel, ~60-90 sec).
+ * Uses wan-video/wan-2.2-s2v (~$0.60/Reel, ~2-3 min) for cost-effective high-quality lip-sync.
  *
  * Usage (standalone):
  *   node avatar/video/lipsync_worker.js <concept_id>
@@ -69,19 +69,31 @@ async function rehostVideo(sourceUrl, destPath) {
 }
 
 /**
- * Run ByteDance OmniHuman.
- *   - Input:  hero image URL + voice WAV URL
- *   - Output: talking-head/body MP4 with natural movement
+ * Run Wan 2.2 Speech-to-Video.
+ *   - Input:  hero image URL + voice WAV URL + scene prompt
+ *   - Output: talking-head MP4 at ~$0.02/sec (₹50 for 30s reel)
+ *   - Falls back to OmniHuman if Wan 2.2 fails (rare).
  * @returns {Promise<string>} URL of the rehosted MP4
  */
 async function generateTalkingHead({ heroImageUrl, voiceUrl, conceptId }) {
-  log.info(`Sending to OmniHuman (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
-  log.info(`(Expect ~3-5 min on H100 GPU — do not interrupt)`);
+  log.info(`Sending to Wan 2.2 S2V (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
+  log.info(`(Expect ~2-3 min on L40S GPU — do not interrupt)`);
 
-  const result = await runModel('omni_human', {
-    image: heroImageUrl,
-    audio: voiceUrl,
-  }, { timeoutMs: 900_000 });    // up to 15 min for long audio
+  let result;
+  try {
+    result = await runModel('wan_2_2_s2v', {
+      image: heroImageUrl,
+      audio: voiceUrl,
+      prompt: 'A young woman speaking naturally to the camera, gentle natural facial movements and expressions, professional content creator',
+      num_frames_per_chunk: 81,
+    }, { timeoutMs: 900_000 });
+  } catch (err) {
+    log.warn(`Wan 2.2 failed (${err.message?.slice(0,150)}), falling back to OmniHuman...`);
+    result = await runModel('omni_human', {
+      image: heroImageUrl,
+      audio: voiceUrl,
+    }, { timeoutMs: 900_000 });
+  }
 
   const remoteUrl = Array.isArray(result.output) ? result.output[0] : result.output;
   log.info(`OmniHuman returned: ${remoteUrl}`);

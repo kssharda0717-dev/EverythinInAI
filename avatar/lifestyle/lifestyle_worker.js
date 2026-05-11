@@ -1,31 +1,28 @@
 #!/usr/bin/env node
 /**
- * EverythinInAI — Lifestyle Reel Worker (Phase 14)
+ * EverythinInAI — Lifestyle Reel Worker (Phase 16: Action Edition)
  *
- * Generates "day-in-life" Reels for the IG Subscription paywall.
- * No script, no scraped signal — just pure aesthetic Avi content.
+ * Generates a high-engagement, action-driven lifestyle Reel of Rhea Kapoor.
+ * Used Saturday/Sunday for weekend lifestyle posts.
  *
- * Each Reel is built from 4 lifestyle keyframes generated via Avi's LoRA,
- * stitched with Ken Burns motion, ambient music bed, and a brand watermark.
+ * Pipeline:
+ *   1. Pick a random action mood (gym, pilates, driving, swimming, etc.)
+ *   2. Generate ONE high-quality action hero image via Flux+LoRA  ($0.025)
+ *   3. Send hero image to Kling v1.6 Standard for animation        ($0.50, 10s clip)
+ *   4. Add ambient/upbeat background music via ffmpeg              ($0)
  *
- * Moods (each picks 4 distinct micro-moments):
- *   - morning_routine   : waking up, matcha, journaling, sunlight stretches
- *   - cafe              : laptop at cafe, sipping coffee, looking at phone, candid laugh
- *   - working           : at desk, typing, reading, thoughtful pose
- *   - golden_hour       : balcony, rooftop, sunset light, contemplative
- *   - reading           : book corner, pages, soft window light
- *
- * Cost: 4 × $0.025 (LoRA) + ffmpeg = ~$0.10 per Lifestyle Reel
+ * Cost: ~$0.525 per Lifestyle Reel (~₹44)
  *
  * Usage:
- *   node avatar/lifestyle/lifestyle_worker.js                       # random mood
- *   node avatar/lifestyle/lifestyle_worker.js --mood=morning_routine
- *   node avatar/lifestyle/lifestyle_worker.js --mood=cafe --outfit=oversized_cardigan
+ *   node avatar/lifestyle/lifestyle_worker.js                    # random mood
+ *   node avatar/lifestyle/lifestyle_worker.js --mood=gym
+ *   node avatar/lifestyle/lifestyle_worker.js --mood=pilates --dry-run
  */
 
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const axios = require('axios');
 const dbModule = require('../../engine/core/database');
 const { createLogger } = require('../../engine/utils/logger');
 const personaService = require('../persona/persona_service');
@@ -37,57 +34,88 @@ const { spawnSync } = require('child_process');
 const log = createLogger('lifestyle');
 
 const W = 1080;
-const H = 1350;
+const H = 1920;  // 9:16 vertical for Reels
 const FPS = 30;
+const KLING_DURATION = 10;  // 10-second Kling clip
 
-// Mood → 4 keyframe prompts each
+/**
+ * Action moods - each has:
+ *   - keyframe_prompt: prompt for the static hero image (Flux+LoRA)
+ *   - motion_prompt: prompt for Kling animation (describes the action movement)
+ *   - outfit: outfit string
+ *   - music_mood: which music track to layer ('upbeat', 'calm', 'energetic')
+ */
 const MOODS = {
-  morning_routine: [
-    'sitting on a bed in soft morning light from a large window, sheer curtains, hands holding a steaming ceramic mug, gazing softly out the window, peaceful contemplative expression',
-    'standing in a minimalist sunlit kitchen, pouring matcha into a ceramic cup, slight smile, hair slightly tousled in a relaxed low bun',
-    'sitting cross-legged on a plush cream rug with a leather journal open in her lap, pen in hand, thoughtful soft expression, sunlight falling across the page',
-    'standing by an apartment window with morning city skyline in soft bokeh behind, holding the matcha cup near her face, eyes closed for a moment of stillness',
-  ],
-  cafe: [
-    'sitting at a marble cafe table with a matte black laptop open, hands on keyboard, looking thoughtful at the screen, soft warm cafe ambience with pendant lights in deep bokeh',
-    'leaning forward slightly with a ceramic latte cup in hand, looking off-camera with a soft warm smile, slight motion blur of cafe people in background',
-    'looking down at her phone with a soft amused expression, half-eaten croissant and latte on table, golden afternoon window light',
-    'leaning back relaxed in a cafe chair, holding the latte close to her face, candid genuine laugh caught mid-moment, eyes crinkling',
-  ],
-  working: [
-    'at a minimalist Bandra apartment desk, hands resting on a matte black laptop keyboard, slight three-quarter angle to camera, focused thoughtful expression with the barest hint of a smile',
-    'leaning back in her desk chair, one hand resting on chin, looking up at the camera with calm warm eyes, plants and bookshelf in soft warm bokeh',
-    'standing at a tall workspace, leaning over the desk reading something on a tablet, hair falling forward, soft side window light',
-    'sitting at the desk with a leather journal open, pen in hand, pausing mid-thought, soft smile of quiet focus',
-  ],
-  golden_hour: [
-    'standing on a Bandra rooftop balcony with the Mumbai skyline in soft golden bokeh, hair gently moving in evening breeze, looking out toward the horizon with a calm contemplative expression',
-    'leaning against the rooftop railing, profile view, warm golden sunset light catching her face, eyes closed for a moment of stillness',
-    'walking slowly along the rooftop, hand brushing the railing, mid-stride three-quarter angle to camera, golden hour warm rim light',
-    'sitting on a low stool against the rooftop wall, knees up, arms wrapped around them, gazing into the sunset with a soft warm smile',
-  ],
-  reading: [
-    'sitting in a cozy reading nook with floor-to-ceiling bookshelves behind, hardcover book open in her lap, finger pressed to page mid-thought',
-    'lying on a cream sofa with the book held above her face, slight smile, sunlight falling across her shoulders, soft warm ambience',
-    'standing in front of the bookshelf reaching up to pull a book down, profile angle, sunlight from a high window catching her face',
-    'sitting cross-legged on the floor surrounded by an open book and a steaming ceramic cup, looking up at the camera with a soft engaged expression',
-  ],
-};
-
-const OUTFIT_BY_MOOD = {
-  morning_routine: 'fitted ivory ribbed knit top with high crew neck OR oversized cream cotton sweatshirt, no jewelry, hair softly down or in low loose bun',
-  cafe:            'fitted cream ribbed knit turtleneck OR oversized beige cardigan over high-neck top, no necklace, simple gold stud earrings',
-  working:         'fitted forest green ribbed knit turtleneck OR tailored beige blazer over high-neck cream top, no necklace, hair in low loose bun',
-  golden_hour:     'fitted ivory cashmere sweater OR cream silk blouse buttoned to high neck, no necklace, hair softly waved and loose',
-  reading:         'oversized cream knit cardigan over fitted high-neck top OR ivory cashmere sweater, no necklace, hair in low loose bun',
+  gym: {
+    label: 'Gym workout',
+    keyframe_prompt: 'mid-action at a luxury modern gym, lifting a kettlebell with focused intensity, slight sweat glistening on her forehead, hair tied up in a high ponytail, athletic body confidence, motivational morning sunlight from floor-to-ceiling windows',
+    motion_prompt: 'a fit young woman performing a controlled kettlebell swing, smooth athletic motion, breathing rhythmically, gym ambient lighting, professional fitness influencer aesthetic',
+    outfit: 'sleek matching black athletic set, fitted high-waisted leggings and matching crop tank top, athletic premium look, no necklace',
+    music_mood: 'energetic',
+  },
+  pilates: {
+    label: 'Pilates studio',
+    keyframe_prompt: 'in a pristine bright pilates studio on a reformer machine, mid-stretch with one leg extended gracefully, balanced and elegant pose, natural light flooding through large windows, calm focused expression',
+    motion_prompt: 'a young woman performing a graceful pilates reformer exercise, slow controlled flowing movement, serene focused breathing, soft natural studio light',
+    outfit: 'minimalist matching beige pilates set, fitted leggings and a fitted long-sleeve top, classic clean aesthetic, no jewelry',
+    music_mood: 'calm',
+  },
+  driving: {
+    label: 'Sunset drive',
+    keyframe_prompt: 'in the driver seat of a luxury sports car (sleek matte black or white) at golden hour, hands gripping the steering wheel, looking forward with relaxed confidence, golden sunlight streaming across her face, hair gently moving in the breeze from open windows',
+    motion_prompt: 'a confident young woman driving a luxury car at sunset, hair flowing in the breeze, smooth camera motion, golden hour ambient light, cinematic driving footage',
+    outfit: 'casual chic, oversized linen shirt unbuttoned over a fitted camisole, designer aviator sunglasses on, hair softly waved',
+    music_mood: 'upbeat',
+  },
+  swimming: {
+    label: 'Pool swim',
+    keyframe_prompt: 'emerging from a luxury infinity pool at golden hour, water glistening, hair slicked back wet, slight smile of pure joy, gentle ripples of water around her, mountain or ocean view in the background, classy resort vibe',
+    motion_prompt: 'a young woman emerging gracefully from crystal blue pool water, water droplets falling, slow motion cinematic shot, golden hour reflection on water surface',
+    outfit: 'classy modest one-piece swimsuit in deep emerald or black, sophisticated and elegant, no jewelry',
+    music_mood: 'calm',
+  },
+  climbing: {
+    label: 'Mountain hiking',
+    keyframe_prompt: 'standing on a rocky mountain trail with sweeping valley views behind, mid-stride with one hand resting on a hiking pole, looking out at the vista with confident smile, soft early morning light, adventurous spirit',
+    motion_prompt: 'a young woman hiking confidently on a scenic mountain trail, smooth walking motion, light wind moving her hair, sweeping cinematic landscape',
+    outfit: 'practical chic hiking outfit, fitted black leggings, fitted thermal long-sleeve top, lightweight technical jacket, hair in a high ponytail with cap',
+    music_mood: 'energetic',
+  },
+  dancing: {
+    label: 'Apartment dance',
+    keyframe_prompt: 'mid-twirl in a beautiful minimalist apartment with warm evening lighting, captured mid-laugh, head thrown back slightly with pure joy, hair flowing dynamically, motion blur on the edges',
+    motion_prompt: 'a young woman dancing playfully in a minimalist apartment, twirling and laughing freely, dynamic flowing motion, warm ambient evening light, joyful candid moment',
+    outfit: 'flowing silk slip dress in cream or champagne, elegant and feminine, bare feet, natural makeup',
+    music_mood: 'upbeat',
+  },
+  yoga: {
+    label: 'Sunrise yoga',
+    keyframe_prompt: 'on a yoga mat on a serene rooftop or beach at sunrise, holding a graceful warrior pose, eyes closed in deep concentration, soft golden light catching her face and outline, peaceful spiritual energy',
+    motion_prompt: 'a young woman flowing through a graceful yoga sequence at sunrise, slow controlled transitions between poses, peaceful breathing, golden hour ambient light',
+    outfit: 'fitted matching sage green yoga set, high-waisted leggings and a fitted long-sleeve top, hair in a low loose bun, no jewelry',
+    music_mood: 'calm',
+  },
+  bowling: {
+    label: 'Bowling night',
+    keyframe_prompt: 'mid-throw at a trendy retro bowling alley, captured in motion releasing the bowling ball, focused playful expression, neon lights and friends slightly blurred in the background, fun social ambience',
+    motion_prompt: 'a young woman bowling at a stylish bowling alley, smooth throwing motion, walking forward with the ball release, neon ambient lighting, dynamic social setting',
+    outfit: 'casual stylish look, fitted dark wash jeans, vintage band t-shirt tucked in, leather jacket draped on shoulders, hair in messy waves',
+    music_mood: 'upbeat',
+  },
+  beach: {
+    label: 'Beach walk',
+    keyframe_prompt: 'walking barefoot along the edge of a pristine beach at golden hour, gentle waves lapping at her feet, holding sandals in one hand, looking back over her shoulder with a serene smile, hair flowing in the ocean breeze',
+    motion_prompt: 'a young woman walking peacefully along a beach at sunset, gentle ocean waves at her feet, soft wind in her hair, golden hour cinematic ambient light',
+    outfit: 'flowing white linen sundress with a low V back, classy beachwear aesthetic, hair softly waved and sun-kissed',
+    music_mood: 'calm',
+  },
 };
 
 function parseArgs(argv) {
-  const args = { mood: null, outfit: null, dryRun: false };
+  const args = { mood: null, dryRun: false };
   for (const a of argv.slice(2)) {
     if (a === '--dry-run') args.dryRun = true;
     else if (a.startsWith('--mood=')) args.mood = a.split('=')[1];
-    else if (a.startsWith('--outfit=')) args.outfit = a.split('=')[1];
   }
   return args;
 }
@@ -98,68 +126,60 @@ function pickMood(forceKey) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
-function buildPrompt(scene, outfitDescriptor, trigger) {
+function buildHeroPrompt(mood, trigger) {
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
-    scene + '.',
-    `Wearing: ${outfitDescriptor}. Modest, sophisticated, NEVER plunging neckline, NEVER showing cleavage.`,
-    `Photographic style: editorial lifestyle photograph, shot on Sony A7R IV with 50mm prime at f/2.0, shallow depth of field, photorealistic ultra-detailed natural skin texture with visible pores, subtle 35mm film grain, magazine quality, Vogue India aesthetic, candid documentary feel, NOT illustration, NOT cartoon, NOT cgi.`,
+    mood.keyframe_prompt + '.',
+    `Wearing: ${mood.outfit}.`,
+    `Photographic style: cinematic action photograph, shot on Sony A7R IV with 50mm prime at f/2.0, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.`,
   ].join(' ');
 }
 
-async function renderKeyframe({ persona, scene, outfit, trigger, runId, idx }) {
-  const prompt = buildPrompt(scene, outfit, trigger);
+async function renderHeroImage({ persona, mood, trigger, runId }) {
+  const prompt = buildHeroPrompt(mood, trigger);
   const seed = Math.floor(Math.random() * 1_000_000);
+
+  log.info(`[1/3] Rendering action hero image (Flux+LoRA)...`);
   const result = await runModel('flux_dev_lora', {
     prompt,
     lora_weights: persona.active_lora_url,
     lora_scale: 1.0,
-    aspect_ratio: '4:5',
+    aspect_ratio: '9:16',  // 9:16 vertical for Reels
     num_outputs: 1,
     num_inference_steps: 28,
     guidance: 3.0,
     output_format: 'webp',
-    output_quality: 92,
+    output_quality: 95,
     go_fast: false,
     seed,
   }, { timeoutMs: 240_000 });
 
   const remoteUrl = result.output[0];
-  const destPath = `lifestyle/${runId}/kf-${idx}-${Date.now()}.webp`;
+  const destPath = `lifestyle/${runId}/hero-${Date.now()}.webp`;
   const hosted = await rehostImage(remoteUrl, destPath);
   return { ...hosted, prompt, seed, cost: result.cost_usd };
 }
 
-function buildKenBurnsFilter(numImages, perImageDur, transitionDur) {
-  const zoomFrames = Math.round(perImageDur * FPS);
-  const inputFilters = [];
-  // Pre-scale to a larger canvas so zoompan has room to zoom into without
-  // blurring. Source webp from Flux is ~896x1088; we upscale to W*2 x H*2 first,
-  // then center-crop to the W*2 x H*2 canvas, THEN zoompan rescales down to W x H.
-  const upW = W * 2;
-  const upH = H * 2;
-  for (let i = 0; i < numImages; i++) {
-    const zoomDir = i % 2 === 0
-      ? `zoom='min(zoom+0.0006,1.18)'`
-      : `zoom='if(lte(zoom,1.001),1.18,max(zoom-0.0006,1.0))'`;
-    const pan = `x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'`;
-    // Use scale=upW:upH (no force_original_aspect_ratio) so the source ALWAYS
-    // gets resized to the target canvas regardless of input dimensions. Then
-    // zoompan does the actual Ken Burns zoom and outputs at W x H.
-    inputFilters.push(
-      `[${i}:v]scale=${upW}:${upH}:flags=lanczos,setsar=1,` +
-      `zoompan=${zoomDir}:${pan}:d=${zoomFrames}:s=${W}x${H}:fps=${FPS}[v${i}]`
-    );
-  }
-  const xfade = [];
-  let prev = 'v0';
-  for (let i = 1; i < numImages; i++) {
-    const offset = (perImageDur * i) - transitionDur;
-    const out = (i === numImages - 1) ? 'vout' : `vx${i}`;
-    xfade.push(`[${prev}][v${i}]xfade=transition=fade:duration=${transitionDur}:offset=${offset.toFixed(3)}[${out}]`);
-    prev = out;
-  }
-  return [...inputFilters, ...xfade].join(';');
+async function animateWithKling({ heroImageUrl, mood }) {
+  log.info(`[2/3] Animating with Kling v1.6 Standard (~2-3 min)...`);
+  const result = await runModel('kling_v1_6_std', {
+    prompt: mood.motion_prompt,
+    start_image: heroImageUrl,
+    duration: KLING_DURATION,
+    aspect_ratio: '9:16',
+    cfg_scale: 0.5,
+    negative_prompt: 'distorted face, deformed body, multiple people, extra limbs, blurry, low quality',
+  }, { timeoutMs: 600_000 });
+
+  const remoteUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+  log.info(`Kling returned: ${remoteUrl}`);
+  return { url: remoteUrl, cost: result.cost_usd };
+}
+
+async function downloadFile(url, destPath) {
+  const resp = await axios.get(url, { responseType: 'arraybuffer', timeout: 120_000 });
+  fs.writeFileSync(destPath, Buffer.from(resp.data));
+  return destPath;
 }
 
 async function uploadFinal(localPath, runId) {
@@ -183,90 +203,75 @@ async function main() {
   }
 
   const moodKey = pickMood(args.mood);
-  const scenes = MOODS[moodKey];
-  const outfit = args.outfit && OUTFIT_BY_MOOD[args.outfit] ? OUTFIT_BY_MOOD[args.outfit] : OUTFIT_BY_MOOD[moodKey];
+  const mood = MOODS[moodKey];
   const trigger = persona.active_lora_trigger || 'AVI_TOK';
 
   const runId = `${moodKey}-${Date.now()}`;
-  log.info(`Lifestyle Reel run ${runId}  mood=${moodKey}`);
+  log.info(`Lifestyle Reel run ${runId}  mood=${moodKey} (${mood.label})`);
 
   const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `lifestyle-${runId.slice(0, 14)}-`));
   log.info(`Workspace: ${workDir}`);
 
   if (args.dryRun) {
-    log.info(`DRY RUN \u2014 would render 4 keyframes for mood "${moodKey}"`);
-    scenes.forEach((s, i) => log.info(`  kf[${i}]: ${s.substring(0, 100)}...`));
+    log.info(`DRY RUN — mood "${moodKey}" (${mood.label})`);
+    log.info(`  Hero prompt: ${buildHeroPrompt(mood, trigger).substring(0, 200)}...`);
+    log.info(`  Motion prompt: ${mood.motion_prompt}`);
+    log.info(`  Music mood: ${mood.music_mood}`);
     return;
   }
 
-  // 1. Render 4 keyframes
-  log.info(`Rendering 4 lifestyle keyframes...`);
-  const keyframes = [];
   let totalCost = 0;
-  for (let i = 0; i < scenes.length; i++) {
-    log.info(`  [${i + 1}/4] ${scenes[i].substring(0, 70)}...`);
-    const r = await renderKeyframe({ persona, scene: scenes[i], outfit, trigger, runId, idx: i });
-    keyframes.push(r);
-    totalCost += r.cost;
-    log.info(`    \u2713 ${r.publicUrl}`);
-  }
 
-  // 2. Download keyframes locally for ffmpeg
-  const axios = require('axios');
-  const localImages = [];
-  for (let i = 0; i < keyframes.length; i++) {
-    const localPath = path.join(workDir, `kf${i}.webp`);
-    const resp = await axios.get(keyframes[i].publicUrl, { responseType: 'arraybuffer', timeout: 60_000 });
-    fs.writeFileSync(localPath, Buffer.from(resp.data));
-    localImages.push(localPath);
-  }
+  // Step 1: Generate hero action image
+  const hero = await renderHeroImage({ persona, mood, trigger, runId });
+  totalCost += hero.cost;
+  log.info(`  ✓ Hero: ${hero.publicUrl}`);
 
-  // 3. Get music
-  const musicPath = await getMusicTrack('calm');
+  // Step 2: Animate with Kling
+  const kling = await animateWithKling({ heroImageUrl: hero.publicUrl, mood });
+  totalCost += kling.cost;
+  log.info(`  ✓ Kling video: ${kling.url}`);
 
-  // 4. Ken Burns video assembly
-  const TOTAL_DURATION = 20;        // 20-sec lifestyle reel
-  const transitionDur = 0.7;
-  const perImageDur = TOTAL_DURATION / keyframes.length + transitionDur;
+  // Step 3: Download Kling video locally
+  const klingLocalPath = path.join(workDir, 'kling.mp4');
+  log.info(`[3/3] Downloading Kling video and adding music...`);
+  await downloadFile(kling.url, klingLocalPath);
 
-  const filter = buildKenBurnsFilter(keyframes.length, perImageDur, transitionDur);
+  // Get music track matching the mood
+  const musicPath = await getMusicTrack(mood.music_mood);
 
-  // 5. Clean output — NO watermark, NO outro (premium aesthetic).
-  //    Branding lives in the IG caption + handle, not burned into the pixels.
+  // Mux Kling video with music via ffmpeg
   const outputMp4 = path.join(workDir, 'final.mp4');
-
-  // ffmpeg: 4 image inputs + 1 music input + Ken Burns filter (no overlay text)
-  const args2 = [
+  const ffArgs = [
     '-y',
-    ...localImages.flatMap(p => ['-loop', '1', '-t', String(perImageDur + 1), '-i', p]),
+    '-i', klingLocalPath,
     '-stream_loop', '-1', '-i', musicPath,
-    '-filter_complex', filter + `;[${keyframes.length}:a]volume=0.55,atrim=0:${TOTAL_DURATION},afade=t=in:st=0:d=1.5,afade=t=out:st=${TOTAL_DURATION - 2}:d=2[abed]`,
-    '-map', '[vout]',
+    '-filter_complex',
+    `[1:a]volume=0.6,atrim=0:${KLING_DURATION},afade=t=in:st=0:d=1,afade=t=out:st=${KLING_DURATION - 1.5}:d=1.5[abed]`,
+    '-map', '0:v',
     '-map', '[abed]',
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20',
-    '-pix_fmt', 'yuv420p',
+    '-c:v', 'copy',  // pass through Kling's video
     '-c:a', 'aac', '-b:a', '192k', '-ar', '44100',
-    '-r', String(FPS),
     '-shortest',
-    '-t', String(TOTAL_DURATION),
+    '-t', String(KLING_DURATION),
     outputMp4,
   ];
 
-  log.info(`Running ffmpeg lifestyle assembly...`);
-  const r = spawnSync('ffmpeg', args2, { stdio: 'inherit', timeout: 300_000 });
+  log.info(`Running ffmpeg to mux music...`);
+  const r = spawnSync('ffmpeg', ffArgs, { stdio: 'inherit', timeout: 120_000 });
   if (r.status !== 0) throw new Error(`ffmpeg failed (status=${r.status})`);
 
-  // 6. Upload
+  // Step 4: Upload final
   log.info(`Uploading lifestyle Reel...`);
   const hosted = await uploadFinal(outputMp4, runId);
 
   log.info(`══════════════════════════════════════════════`);
   log.info(`✓ Lifestyle Reel ready.`);
   log.info(`   url      : ${hosted.publicUrl}`);
-  log.info(`   mood     : ${moodKey}`);
-  log.info(`   duration : ${TOTAL_DURATION}s`);
+  log.info(`   mood     : ${moodKey} (${mood.label})`);
+  log.info(`   duration : ${KLING_DURATION}s`);
   log.info(`   size     : ${(hosted.sizeBytes / 1024 / 1024).toFixed(2)} MB`);
-  log.info(`   cost     : ~$${totalCost.toFixed(3)}`);
+  log.info(`   cost     : ~$${totalCost.toFixed(3)} (~₹${(totalCost * 84).toFixed(0)})`);
   log.info(`══════════════════════════════════════════════`);
 }
 

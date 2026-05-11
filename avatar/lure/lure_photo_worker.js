@@ -36,37 +36,37 @@ const log = createLogger('lure_photo');
 const W = 1080;
 const H = 1350;
 
-// 6 lure scene templates. Each is intellectual + attractive + classy.
+// 6 lure scene templates. Focus: highly engaging, natural slice-of-life moments.
 const SCENES = {
-  cafe_book: {
-    label: 'Cafe with hardcover book',
-    scene: 'sitting at a marble cafe table near a sunlit window, leaning slightly forward with a hardcover hardback book open in her lap, looking up softly at the camera with a warm knowing half-smile, ceramic latte cup beside the book, candid editorial moment, soft warm cafe ambience with pendant lights in deep bokeh',
-    outfit: 'fitted cream cashmere sweater with high crew neck, modest sophisticated, no cleavage, hair softly waved and loose over shoulders, simple gold stud earrings, no necklace',
+  mirror_selfie: {
+    label: 'Getting ready mirror selfie',
+    scene: 'taking a casual mirror selfie with her phone covering part of her face, standing in a chic modern bathroom or walk-in closet, looking effortlessly stunning, soft warm vanity lighting, highly natural candid feel',
+    outfit: 'elegant fitted black evening dress, classy yet alluring, hair perfectly styled with loose waves falling over one shoulder',
   },
-  golden_rooftop: {
-    label: 'Bandra rooftop at golden hour',
-    scene: 'standing on a Bandra rooftop balcony with the Mumbai skyline in soft golden bokeh, three-quarter angle to camera with body slightly turned, hair gently moving in evening breeze, looking back over her shoulder toward camera with a soft confident smile, golden warm rim light catching her face',
-    outfit: 'fitted ivory ribbed knit turtleneck tucked into high-waisted dark trousers, modest sophisticated, no cleavage, hair softly waved long, simple gold hoop earrings',
+  cafe_candid: {
+    label: 'Candid cafe moment',
+    scene: 'sitting at a trendy aesthetic cafe, looking up from her iced coffee with a genuine radiant smile, candid mid-laugh expression, natural sunlight hitting her face, blurry background of cafe patrons and greenery',
+    outfit: 'stylish oversized white linen shirt slightly unbuttoned over a simple fitted camisole, effortless weekend chic, delicate gold jewelry',
   },
-  library_corner: {
-    label: 'Library reading nook',
-    scene: 'sitting in a cozy reading nook with floor-to-ceiling oak bookshelves behind, knees up with a hardcover book balanced on them, looking up softly at the camera mid-thought with finger pressed gently against her lower lip, sunlight from a high window catching one side of her face',
-    outfit: 'oversized cream knit cardigan over fitted high-neck cream blouse, modest sophisticated, no cleavage, hair in low loose elegant bun with soft tendrils framing face, simple gold stud earrings',
+  golden_hour_car: {
+    label: 'Driving at golden hour',
+    scene: 'sitting in the driver seat of a luxury car with the window down, golden hour sunlight streaming in and illuminating her hair, looking out the window with a serene confident expression, wind slightly blowing her hair',
+    outfit: 'casual but expensive-looking beige knit top, designer sunglasses resting on her head',
   },
-  apartment_laptop: {
-    label: 'Minimalist apartment workspace',
-    scene: 'sitting at a sleek minimalist desk in a sunlit Bandra apartment, three-quarter body angle, one hand resting on a matte black laptop keyboard, the other tucking a strand of hair behind her ear, looking sideways at the camera with a soft warm smile, plants and bookshelf in deep warm bokeh',
-    outfit: 'tailored beige blazer over high-neck cream silk top, modest sophisticated, no cleavage, hair in low loose bun, simple small gold stud earrings, classy intellectual',
+  dancing_candid: {
+    label: 'Random dancing candid',
+    scene: 'captured mid-twirl or dancing playfully in a beautiful minimalist apartment living room, motion blur on the edges, big genuine laugh, looking away from the camera, warm evening ambient lighting',
+    outfit: 'flowing silk slip dress, elegant and fluid, bare feet, hair moving dynamically with the motion',
   },
-  garden_morning: {
-    label: 'Garden bench, morning light',
-    scene: 'sitting elegantly on a wooden bench in a leafy private garden in the morning, leaves and soft greenery in bokeh, holding a steaming ceramic mug close to her face with both hands, looking softly at the camera with a peaceful contented smile, soft golden morning sunlight from camera-left',
-    outfit: 'fitted cream cashmere sweater with high crew neck and oversized cream wool overcoat draped on her shoulders, modest sophisticated, no cleavage, hair softly waved long',
+  vacation_stroll: {
+    label: 'Vacation evening stroll',
+    scene: 'walking down a cobblestone street in a European-style town at dusk, looking back over her shoulder at the camera with an inviting smile, fairy lights and blurred restaurant patios in the background',
+    outfit: 'chic summer evening outfit, off-the-shoulder top with a flowing skirt, effortless high-end vacation aesthetic',
   },
-  balcony_evening: {
-    label: 'Apartment balcony at dusk',
-    scene: 'standing leaning against an apartment balcony railing at dusk with city lights and warm fairy lights in deep bokeh behind, half-turned to camera, looking softly over her shoulder with a warm slightly mysterious smile, warm tungsten ambient light catching her cheekbones',
-    outfit: 'fitted ivory silk blouse buttoned to high neck with delicate gold buttons, tucked into high-waisted dark trousers, modest sophisticated, no cleavage, hair softly waved',
+  morning_routine: {
+    label: 'Morning routine natural',
+    scene: 'standing in a bright modern kitchen, holding a matcha latte, looking directly at the camera with a fresh-faced, "I woke up like this" natural smile, bright morning light filling the room',
+    outfit: 'cozy high-end matching lounge set, hair tied up in a messy bun with face-framing pieces, minimal makeup look',
   },
 };
 
@@ -93,7 +93,7 @@ function buildPrompt(sceneKey, persona, trigger) {
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
-    `Photographic style: editorial portrait, shot on Sony A7R IV with 85mm prime at f/2.0, beautiful shallow depth of field, photorealistic ultra-detailed natural skin texture with visible pores, subtle 35mm film grain, magazine-quality, Vogue India aesthetic, candid documentary feel, intellectual + attractive + classy + sophisticated, NEVER skimpy, NEVER thirst-trap, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
+    `Photographic style: shot on iPhone 15 Pro, casual Instagram influencer aesthetic, photorealistic ultra-detailed natural skin texture, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
   ].join(' ');
 }
 
