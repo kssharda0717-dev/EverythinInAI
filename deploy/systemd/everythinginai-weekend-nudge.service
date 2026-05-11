@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI — Weekend Travel Nudge (Friday 18:00 IST)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/scheduler/weekend_travel_nudge.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/weekend_nudge.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/weekend_nudge.log
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

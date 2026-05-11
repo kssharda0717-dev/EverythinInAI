@@ -1,0 +1,10 @@
+[Unit]
+Description=EverythinInAI — Weekend Travel Nudge Timer (Friday 12:30 UTC = 18:00 IST)
+Requires=everythinginai-weekend-nudge.service
+
+[Timer]
+OnCalendar=Fri *-*-* 12:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

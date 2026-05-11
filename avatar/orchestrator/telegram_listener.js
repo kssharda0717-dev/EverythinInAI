@@ -9,6 +9,9 @@
  *   /stats_<id> v=N w=N.N — log Instagram performance for a reel (views + watch time)
  *   /weekly_stats         — multi-line: log performance for the whole week (push-based reminder)
  *   /perf                 — view ranked framework performance from last 30 days
+ *   /travel <location> [activities]  — plan Rhea's next weekend trip
+ *   /travel home          — reset to default (Bandra/Mumbai)
+ *   /travel list          — show upcoming travel plans
  *   /help                 — list commands
  *
  * On a successful /pick:
@@ -263,6 +266,8 @@ async function poll() {
         await handleGo(chatId);
       } else if (text === '/perf') {
         await handlePerf(chatId);
+      } else if (text.startsWith('/travel')) {
+        await handleTravel(chatId, text);
       } else if (text.startsWith('/weekly_stats')) {
         await handleWeeklyStats(chatId, text);
       } else if (text.startsWith('/stats_') || text.startsWith('/stats ')) {
@@ -281,6 +286,152 @@ async function poll() {
     await new Promise(r => setTimeout(r, 5000));
   }
   setImmediate(poll);
+}
+
+// ===== Travel Calendar Handler =====
+
+/**
+ * /travel <location> [vibe] ["activity1, activity2"]   — plan upcoming weekend trip
+ * /travel home   — reset to Bandra/Mumbai (no special trip)
+ * /travel list   — show upcoming trips
+ *
+ * Date logic: defaults to the upcoming Saturday-Sunday. If a trip already exists for that weekend, it is replaced.
+ */
+async function handleTravel(chatId, text) {
+  const db = dbModule.getClient();
+  const arg = text.replace(/^\/travel\s*/, '').trim();
+
+  // /travel list
+  if (arg === 'list' || arg === '') {
+    const today = new Date().toISOString().slice(0, 10);
+    const { data } = await db.from('travel_calendar')
+      .select('*').gte('end_date', today).order('start_date', { ascending: true }).limit(10);
+    if (!data || data.length === 0) {
+      await reply(chatId, '🏠 No upcoming travel. Rhea stays in Bandra by default.\n\nUse `/travel <location>` to plan a trip.');
+      return;
+    }
+    let msg = '🌍 *Upcoming Travel*\n\n';
+    for (const t of data) {
+      msg += `• *${t.start_date} → ${t.end_date}*  ${t.location} (${t.vibe || 'no vibe'})\n`;
+      if (t.planned_activities && t.planned_activities.length) {
+        msg += `   _activities: ${t.planned_activities.join(', ')}_\n`;
+      }
+    }
+    await reply(chatId, msg);
+    return;
+  }
+
+  // /travel home  — wipe upcoming weekend trip
+  if (arg.toLowerCase() === 'home') {
+    const { saturday, sunday } = getUpcomingWeekend();
+    await db.from('travel_calendar').delete().eq('start_date', saturday).eq('end_date', sunday);
+    await reply(chatId, `✅ Travel cleared. Rhea will stay in Bandra/Mumbai for ${saturday} → ${sunday}.`);
+    return;
+  }
+
+  // /travel <location> [vibe] ["activity1, activity2, ..."]
+  // Examples:
+  //   /travel Goa
+  //   /travel Goa beach
+  //   /travel Goa beach "surfing, beach yoga, sunset drive"
+  //   /travel "New Delhi" city
+  //   /travel Lisbon european_city "old town walk, pastel de nata, fado night"
+  const parts = parseTravelArgs(arg);
+  if (!parts.location) {
+    await reply(chatId,
+      '❌ Usage:\n' +
+      '`/travel <location> [vibe] ["activity1, activity2"]`\n\n' +
+      'Examples:\n' +
+      '`/travel Goa beach "surfing, beach yoga, sunset drive"`\n' +
+      '`/travel Lisbon`\n' +
+      '`/travel home`  (cancel)\n' +
+      '`/travel list`  (show plans)'
+    );
+    return;
+  }
+
+  const { saturday, sunday } = getUpcomingWeekend();
+
+  // Replace any existing entry for this weekend
+  await db.from('travel_calendar').delete().eq('start_date', saturday).eq('end_date', sunday);
+
+  const { error } = await db.from('travel_calendar').insert({
+    start_date: saturday,
+    end_date: sunday,
+    location: parts.location,
+    vibe: parts.vibe || null,
+    planned_activities: parts.activities,
+    notes: null,
+  });
+
+  if (error) {
+    await reply(chatId, `❌ DB error: ${error.message}`);
+    return;
+  }
+
+  await reply(chatId,
+    `✅ *Travel Planned*\n\n` +
+    `📅 ${saturday} → ${sunday}\n` +
+    `📍 ${parts.location}\n` +
+    `🌺 Vibe: ${parts.vibe || 'adventure'}\n` +
+    (parts.activities.length ? `🎡 Activities: ${parts.activities.join(', ')}\n` : '') +
+    `\n_Saturday & Sunday morning ideation will set Rhea's lifestyle reels in ${parts.location}._`
+  );
+}
+
+function getUpcomingWeekend() {
+  // Returns {saturday: 'YYYY-MM-DD', sunday: 'YYYY-MM-DD'} for the upcoming weekend.
+  // If today is Sat or Sun, returns this weekend; else returns the next one.
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun, 6=Sat
+  let saturday;
+  if (dow === 6) {
+    saturday = new Date(now);
+  } else if (dow === 0) {
+    saturday = new Date(now);
+    saturday.setDate(saturday.getDate() - 1);
+  } else {
+    const daysUntilSat = (6 - dow + 7) % 7;
+    saturday = new Date(now);
+    saturday.setDate(saturday.getDate() + daysUntilSat);
+  }
+  const sunday = new Date(saturday);
+  sunday.setDate(sunday.getDate() + 1);
+  return {
+    saturday: saturday.toISOString().slice(0, 10),
+    sunday: sunday.toISOString().slice(0, 10),
+  };
+}
+
+/**
+ * Parse a /travel arg string into { location, vibe, activities }.
+ * Accepts:
+ *   Goa
+ *   Goa beach
+ *   Goa beach "surfing, beach yoga"
+ *   "New Delhi" city "shopping, biryani, qawwali"
+ */
+function parseTravelArgs(str) {
+  const tokens = [];
+  let buf = '';
+  let inQuotes = false;
+  for (const ch of str) {
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (ch === ' ' && !inQuotes) {
+      if (buf) { tokens.push(buf); buf = ''; }
+    } else {
+      buf += ch;
+    }
+  }
+  if (buf) tokens.push(buf);
+
+  const result = { location: null, vibe: null, activities: [] };
+  if (tokens.length >= 1) result.location = tokens[0];
+  if (tokens.length >= 2) result.vibe = tokens[1];
+  if (tokens.length >= 3) {
+    result.activities = tokens[2].split(',').map(s => s.trim()).filter(Boolean);
+  }
+  return result;
 }
 
 // ===== Analytics Feedback Loop Handlers =====
