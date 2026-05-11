@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI - Weekly Health Report (Sunday 20:00 IST)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/scheduler/weekly_health_report.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/health_report.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/health_report.log
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target

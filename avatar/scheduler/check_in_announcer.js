@@ -51,12 +51,13 @@ async function main() {
   const earliest = new Date(now - CHECKIN_AGE_MAX_HOURS * 3600_000).toISOString();
   const latest = new Date(now - CHECKIN_AGE_MIN_HOURS * 3600_000).toISOString();
 
-  log.info(`Looking for reels completed between ${earliest} and ${latest}`);
+  log.info(`Looking for reels POSTED between ${earliest} and ${latest}`);
 
+  // Anchor on posted_at (when the user actually published to Instagram), not completed_at (when render finished)
   const { data: dueRows, error } = await db.from('content_calendar')
-    .select('id, target_date, content_type, concept_id, completed_at, state')
-    .gte('completed_at', earliest)
-    .lte('completed_at', latest)
+    .select('id, target_date, content_type, concept_id, posted_at, state')
+    .gte('posted_at', earliest)
+    .lte('posted_at', latest)
     .in('state', ['done', 'ready']);
   if (error) {
     log.error(`Failed to query calendar: ${error.message}`);
@@ -98,7 +99,7 @@ async function main() {
 
     const idPrefix = row.concept_id.slice(0, 8);
     const friendly = c.title.length > 40 ? c.title.slice(0, 40) + '…' : c.title;
-    const hoursOld = Math.round((now - new Date(row.completed_at).getTime()) / 3600_000);
+    const hoursOld = Math.round((now - new Date(row.posted_at).getTime()) / 3600_000);
 
     const msg =
       `\u23F0 *48h Check-in*\n\n` +

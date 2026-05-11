@@ -39,7 +39,7 @@ async function pollTraining(trainingId) {
 }
 
 async function main() {
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
   const explicitId = process.argv[2];
 

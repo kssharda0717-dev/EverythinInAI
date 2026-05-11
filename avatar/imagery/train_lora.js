@@ -165,7 +165,7 @@ async function ensureDestinationModel(destination) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
 
   // 1. Fetch training images

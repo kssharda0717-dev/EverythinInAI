@@ -202,7 +202,7 @@ async function uploadFinal(localPath, runId) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   if (!persona.active_lora_url) {
     log.error('Persona has no active_lora_url. Train Avi LoRA first.');
     process.exit(1);
@@ -242,8 +242,21 @@ async function main() {
       music_mood: concept.music_mood || 'upbeat',
     };
   } else {
-    // ===== LEGACY PATH: hardcoded mood =====
-    log.warn('No concept with keyframe_prompt found. Falling back to hardcoded MOODS.');
+    // ===== LEGACY PATH: hardcoded mood (alert user via Telegram) =====
+    const reason = concept ? `concept ${concept.id.slice(0,8)} is missing keyframe_prompt` : 'no concept passed';
+    log.warn(`SILENT-FALLBACK ALERT: ${reason}. Using hardcoded MOODS.`);
+    try {
+      const axios = require('axios');
+      const TBT = process.env.TELEGRAM_BOT_TOKEN;
+      const TCID = process.env.TELEGRAM_CHAT_ID;
+      if (TBT && TCID) {
+        await axios.post(`https://api.telegram.org/bot${TBT}/sendMessage`, {
+          chat_id: TCID,
+          text: `⚠️ *Lifestyle Worker Fallback*\n\n${reason}\n\nUsing hardcoded MOODS instead of LLM-drafted concept. Investigate.`,
+          parse_mode: 'Markdown',
+        }, { timeout: 8000 }).catch(()=>{});
+      }
+    } catch {}
     moodKey = pickMood(args.mood);
     mood = MOODS[moodKey];
   }

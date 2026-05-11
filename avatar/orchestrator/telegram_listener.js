@@ -12,6 +12,9 @@
  *   /travel <location> [activities]  — plan Rhea's next weekend trip
  *   /travel home          — reset to default (Bandra/Mumbai)
  *   /travel list          — show upcoming travel plans
+ *   /posted [<id>]        — mark a reel as posted to Instagram (anchors 48h check-in clock)
+ *   /audit_rejects        — review recently rejected discovery items, recover false negatives
+ *   /healthcheck          — view system spend, latency, queue health
  *   /help                 — list commands
  *
  * On a successful /pick:
@@ -266,6 +269,12 @@ async function poll() {
         await handleGo(chatId);
       } else if (text === '/perf') {
         await handlePerf(chatId);
+      } else if (text === '/healthcheck') {
+        await handleHealthcheck(chatId);
+      } else if (text === '/audit_rejects') {
+        await handleAuditRejects(chatId);
+      } else if (text.startsWith('/posted')) {
+        await handlePosted(chatId, text);
       } else if (text.startsWith('/travel')) {
         await handleTravel(chatId, text);
       } else if (text.startsWith('/weekly_stats')) {
@@ -286,6 +295,119 @@ async function poll() {
     await new Promise(r => setTimeout(r, 5000));
   }
   setImmediate(poll);
+}
+
+// ===== /posted: mark a reel as posted to Instagram (anchors 48h timer) =====
+
+async function handlePosted(chatId, text) {
+  const db = dbModule.getClient();
+  const arg = text.replace(/^\/posted\s*/, '').trim();
+
+  // Default: latest 'done' calendar row that has no posted_at yet
+  let calRow;
+  if (arg) {
+    const { data } = await db.from('content_calendar').select('*').ilike('id', `${arg}%`).maybeSingle();
+    calRow = data;
+  } else {
+    const { data } = await db.from('content_calendar').select('*')
+      .eq('state', 'done')
+      .is('posted_at', null)
+      .order('completed_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    calRow = data;
+  }
+
+  if (!calRow) {
+    await reply(chatId, '❌ No matching calendar row found. Either pass a partial id or finish a render first.');
+    return;
+  }
+
+  await db.from('content_calendar')
+    .update({ posted_at: new Date().toISOString() })
+    .eq('id', calRow.id);
+
+  await reply(chatId,
+    `✅ *Marked as posted*\n\n` +
+    `${calRow.content_type} for ${calRow.target_date}\n` +
+    `Calendar id: \`${calRow.id.slice(0, 12)}\`\n\n` +
+    `_The 48h check-in clock starts now. You'll get a stats prompt in 2 days._`
+  );
+}
+
+// ===== /audit_rejects: review false-negative discovery items =====
+
+async function handleAuditRejects(chatId) {
+  const db = dbModule.getClient();
+  const { data } = await db.from('discovery_queue')
+    .select('id, source_url, title, error_message, created_at')
+    .eq('status', 'rejected')
+    .order('created_at', { ascending: false })
+    .limit(8);
+
+  if (!data || data.length === 0) {
+    await reply(chatId, 'No rejected items in the queue. Nothing to audit.');
+    return;
+  }
+
+  let msg = '🔍 *Recently Rejected Items* (review for false negatives)\n\n';
+  for (const item of data) {
+    msg += `• ${item.title || '(no title)'}\n`;
+    msg += `   ${item.source_url}\n`;
+    msg += `   _Reason: ${item.error_message || 'unknown'}_\n\n`;
+  }
+  msg += `_To recover an item, manually mark it as_ \`pending\` _in Supabase._`;
+  await reply(chatId, msg);
+}
+
+// ===== /healthcheck: spend, latency, queue snapshot =====
+
+async function handleHealthcheck(chatId) {
+  const db = dbModule.getClient();
+  const today = new Date().toISOString().slice(0, 10);
+  const sevenDaysAgo = new Date(Date.now() - 7*24*60*60*1000).toISOString();
+
+  // Today's spend
+  const { data: todaysSpend } = await db.from('daily_spend_log').select('cost_usd, service').eq('date', today);
+  const todayTotal = (todaysSpend || []).reduce((s, r) => s + parseFloat(r.cost_usd || 0), 0);
+
+  // Cap setting
+  const { data: capSetting } = await db.from('system_settings').select('value').eq('key', 'daily_spend_cap_usd').maybeSingle();
+  const cap = capSetting ? parseFloat(capSetting.value) : 5.0;
+
+  // Latency p50/p90 over 7d
+  const { data: latencies } = await db.from('latency_log')
+    .select('service, operation, duration_ms, ok')
+    .gte('created_at', sevenDaysAgo);
+  const latByOp = {};
+  for (const l of (latencies || [])) {
+    const k = `${l.service}/${l.operation}`;
+    if (!latByOp[k]) latByOp[k] = { all: [], fails: 0 };
+    latByOp[k].all.push(l.duration_ms);
+    if (!l.ok) latByOp[k].fails++;
+  }
+  const latLines = Object.entries(latByOp)
+    .map(([k, v]) => {
+      const sorted = v.all.slice().sort((a, b) => a - b);
+      const p50 = sorted[Math.floor(sorted.length * 0.5)] || 0;
+      const p90 = sorted[Math.floor(sorted.length * 0.9)] || 0;
+      return `  ${k}: p50=${(p50/1000).toFixed(1)}s p90=${(p90/1000).toFixed(1)}s ${v.fails > 0 ? `⚠️ ${v.fails} fails` : ''}`;
+    })
+    .slice(0, 8)
+    .join('\n');
+
+  // Queue snapshot
+  const { count: pending } = await db.from('discovery_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending');
+  const { count: rejected } = await db.from('discovery_queue').select('*', { count: 'exact', head: true }).eq('status', 'rejected');
+  const { count: tools } = await db.from('tools').select('*', { count: 'exact', head: true }).eq('is_active', true);
+
+  const msg =
+    `⚙️ *Health Check*\n\n` +
+    `*Today's spend:* $${todayTotal.toFixed(2)} / cap $${cap.toFixed(2)}\n\n` +
+    `*Latency (p50/p90, last 7d):*\n${latLines || '  (no data yet)'}\n\n` +
+    `*Discovery:* ${tools} active tools, ${pending} pending, ${rejected} rejected`;
+
+  await reply(chatId, msg);
 }
 
 // ===== Travel Calendar Handler =====

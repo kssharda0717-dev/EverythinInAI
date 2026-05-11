@@ -1,0 +1,10 @@
+[Unit]
+Description=EverythinInAI - Persona Bible Sync Timer (nightly 02:00 UTC)
+Requires=everythinginai-bible-sync.service
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

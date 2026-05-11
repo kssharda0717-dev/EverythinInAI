@@ -14,10 +14,21 @@ const CACHE_TTL_MS = 5 * 60 * 1000;
 let cache = { row: null, fetchedAt: 0 };
 
 /**
- * Get the active persona (currently always Avi).
- * Optionally pass a slug to fetch a specific persona.
+ * Get the active persona. If no slug is passed, reads current_persona_slug from
+ * system_settings (default: 'avi').
  */
-async function getActivePersona(slug = 'avi') {
+async function getActivePersona(slug) {
+  // Resolve slug from settings if not provided
+  if (!slug) {
+    try {
+      const db0 = dbModule.getClient();
+      const { data: setting } = await db0.from('system_settings').select('value').eq('key', 'current_persona_slug').maybeSingle();
+      slug = (setting && setting.value) ? String(setting.value).replace(/"/g, '') : 'avi';
+    } catch {
+      slug = 'avi';
+    }
+  }
+
   if (cache.row && cache.row.slug === slug && Date.now() - cache.fetchedAt < CACHE_TTL_MS) {
     return cache.row;
   }

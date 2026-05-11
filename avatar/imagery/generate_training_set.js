@@ -123,7 +123,7 @@ function buildPrompt(v) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
 
   if (args.reset) {

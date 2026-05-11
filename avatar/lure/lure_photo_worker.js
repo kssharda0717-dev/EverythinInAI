@@ -142,7 +142,7 @@ async function renderLurePhoto({ persona, sceneKey, calendarId }) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   if (!persona.active_lora_url) {
     log.error('Persona has no active_lora_url. Train Avi LoRA first.');
     process.exit(1);

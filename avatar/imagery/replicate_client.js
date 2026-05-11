@@ -12,6 +12,8 @@
 
 const axios = require('axios');
 const { createLogger } = require('../../engine/utils/logger');
+const { guard } = require('../../engine/core/cost_guard');
+const { record: recordLatency } = require('../../engine/core/latency_tracker');
 
 const log = createLogger('replicate');
 
@@ -69,6 +71,9 @@ function authHeaders() {
 async function runModel(modelKey, input, opts = {}) {
   const model = MODELS[modelKey];
   if (!model) throw new Error(`Unknown model key: ${modelKey}`);
+
+  // Cost guard: refuse expensive calls if daily cap is hit
+  const recordSpend = await guard('replicate', modelKey, model.cost_per_image, opts.context || {});
 
   const pollMs = opts.pollMs ?? 1500;
   const timeoutMs = opts.timeoutMs ?? 180_000;
@@ -137,6 +142,10 @@ async function runModel(modelKey, input, opts = {}) {
   const cost_usd = +(model.cost_per_image * numOutputs).toFixed(4);
 
   log.info(`✓ ${modelKey} done in ${generation_ms}ms (${numOutputs} image${numOutputs > 1 ? 's' : ''}, ~$${cost_usd})`);
+
+  // Record actual cost + latency (non-blocking)
+  recordSpend(cost_usd).catch(() => {});
+  recordLatency('replicate', modelKey, generation_ms, true).catch(() => {});
 
   return { output: outputs, prediction, cost_usd, generation_ms };
 }

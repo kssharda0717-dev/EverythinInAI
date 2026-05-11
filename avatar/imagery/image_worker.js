@@ -135,7 +135,7 @@ async function main() {
   }
   log.info(`Concept: ${concept.title} (${concept.id})`);
 
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   if (!persona.active_lora_url) {
     log.error('Persona has no active_lora_url. Train Avi\'s LoRA first:');
     log.error('  1. node avatar/imagery/generate_training_set.js');

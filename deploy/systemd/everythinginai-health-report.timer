@@ -1,0 +1,10 @@
+[Unit]
+Description=EverythinInAI - Weekly Health Report Timer (Sunday 14:30 UTC = 20:00 IST)
+Requires=everythinginai-health-report.service
+
+[Timer]
+OnCalendar=Sun *-*-* 14:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

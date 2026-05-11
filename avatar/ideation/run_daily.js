@@ -80,7 +80,7 @@ async function main() {
   }
 
   // 1. Load persona
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   log.info(`Persona: ${persona.display_name} (${persona.id})`);
 
   // 2. Decide lure level

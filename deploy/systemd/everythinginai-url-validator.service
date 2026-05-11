@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI - URL Validator (validates active tool URLs)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/engine/maintenance/url_validator.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/url_validator.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/url_validator.log
+TimeoutStartSec=1800
+
+[Install]
+WantedBy=multi-user.target

@@ -23,7 +23,7 @@ const log = createLogger('force_attach');
 
 async function main() {
   const trainingId = process.argv[2];
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
 
   // 1. Diagnose: list all rows

@@ -22,7 +22,7 @@ async function main() {
     process.exit(1);
   }
 
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
 
   let target;

@@ -114,7 +114,7 @@ async function rehostAudio(sourceUrl, destPath) {
 async function main() {
   const args = parseArgs(process.argv);
   const db = dbModule.getClient();
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
 
   if (!persona.active_voice_ref_url) {
     log.error('Persona has no active_voice_ref_url. Run setup_voice_reference.js + activate_voice.js first.');

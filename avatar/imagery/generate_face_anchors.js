@@ -72,7 +72,7 @@ function buildAnchorPrompt(persona, idx) {
 
 async function main() {
   const args = parseArgs(process.argv);
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   log.info(`Generating ${args.count} face anchor candidates for ${persona.display_name}...`);
 
   const db = dbModule.getClient();

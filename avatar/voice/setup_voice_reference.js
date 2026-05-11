@@ -165,7 +165,7 @@ async function generateTestSample(refUrl) {
 }
 
 async function processReference(ref) {
-  const persona = await personaService.getActivePersona('avi');
+  const persona = await personaService.getActivePersona();
   const db = dbModule.getClient();
 
   ensureTools();

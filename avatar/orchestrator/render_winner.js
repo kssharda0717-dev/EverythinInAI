@@ -69,6 +69,23 @@ async function recordStep(calendarId, stepName, status, output = null, costUsd =
   });
 }
 
+/**
+ * Check if a step has already been completed for this calendar row.
+ * Powers idempotency — prevents double-paying for steps that already succeeded
+ * (e.g. orchestrator crashed after lipsync but before captions).
+ */
+async function isStepDone(calendarId, stepName) {
+  const db = dbModule.getClient();
+  const { data } = await db.from('render_steps')
+    .select('id, status')
+    .eq('calendar_id', calendarId)
+    .eq('step_name', stepName)
+    .eq('status', 'done')
+    .limit(1)
+    .maybeSingle();
+  return !!data;
+}
+
 function runScript(scriptPath, args = []) {
   const start = Date.now();
   const r = spawnSync('node', [scriptPath, ...args], {
@@ -83,31 +100,47 @@ function runScript(scriptPath, args = []) {
 
 async function runTechReel(calendarRow) {
   const db = dbModule.getClient();
-  log.info(`════ TECH REEL pipeline ════`);
+  log.info(`════ TECH REEL pipeline (idempotent) ════`);
 
-  // Step 1: hero
-  log.info('[1/4] hero_worker --winner...');
-  let r = runScript('avatar/imagery/hero_worker.js', ['--winner']);
-  if (!r.ok) throw new Error('hero_worker failed');
-  await recordStep(calendarRow.id, 'hero', 'done', { stdout: r.stdout.slice(-500) }, 0.025, r.durationMs);
+  // Step 1: hero (skip if already done)
+  if (await isStepDone(calendarRow.id, 'hero')) {
+    log.info('[1/4] hero_worker SKIPPED (already done)');
+  } else {
+    log.info('[1/4] hero_worker --winner...');
+    let r = runScript('avatar/imagery/hero_worker.js', ['--winner']);
+    if (!r.ok) throw new Error('hero_worker failed');
+    await recordStep(calendarRow.id, 'hero', 'done', { stdout: r.stdout.slice(-500) }, 0.025, r.durationMs);
+  }
 
-  // Step 2: voice
-  log.info('[2/4] voice_worker --winner...');
-  r = runScript('avatar/voice/voice_worker.js', ['--winner']);
-  if (!r.ok) throw new Error('voice_worker failed');
-  await recordStep(calendarRow.id, 'voice', 'done', { stdout: r.stdout.slice(-500) }, 0.03, r.durationMs);
+  // Step 2: voice (skip if already done)
+  if (await isStepDone(calendarRow.id, 'voice')) {
+    log.info('[2/4] voice_worker SKIPPED (already done)');
+  } else {
+    log.info('[2/4] voice_worker --winner...');
+    let r = runScript('avatar/voice/voice_worker.js', ['--winner']);
+    if (!r.ok) throw new Error('voice_worker failed');
+    await recordStep(calendarRow.id, 'voice', 'done', { stdout: r.stdout.slice(-500) }, 0.03, r.durationMs);
+  }
 
-  // Step 3: lipsync (slow — OmniHuman ~5 min)
-  log.info('[3/4] lipsync_worker --winner... (this takes 5 min)');
-  r = runScript('avatar/video/lipsync_worker.js', ['--winner']);
-  if (!r.ok) throw new Error('lipsync_worker failed');
-  await recordStep(calendarRow.id, 'lipsync', 'done', { stdout: r.stdout.slice(-500) }, 0.50, r.durationMs);
+  // Step 3: lipsync (slow — expensive! Skip if already done)
+  if (await isStepDone(calendarRow.id, 'lipsync')) {
+    log.info('[3/4] lipsync_worker SKIPPED (already done) — saved ~$0.50');
+  } else {
+    log.info('[3/4] lipsync_worker --winner... (~3-5 min)');
+    let r = runScript('avatar/video/lipsync_worker.js', ['--winner']);
+    if (!r.ok) throw new Error('lipsync_worker failed');
+    await recordStep(calendarRow.id, 'lipsync', 'done', { stdout: r.stdout.slice(-500) }, 0.50, r.durationMs);
+  }
 
-  // Step 4: engagement edit
-  log.info('[4/4] video_worker --winner...');
-  r = runScript('avatar/video/video_worker.js', ['--winner']);
-  if (!r.ok) throw new Error('video_worker failed');
-  await recordStep(calendarRow.id, 'engagement', 'done', { stdout: r.stdout.slice(-500) }, 0.01, r.durationMs);
+  // Step 4: engagement edit (skip if already done)
+  if (await isStepDone(calendarRow.id, 'engagement')) {
+    log.info('[4/4] video_worker SKIPPED (already done)');
+  } else {
+    log.info('[4/4] video_worker --winner...');
+    let r = runScript('avatar/video/video_worker.js', ['--winner']);
+    if (!r.ok) throw new Error('video_worker failed');
+    await recordStep(calendarRow.id, 'engagement', 'done', { stdout: r.stdout.slice(-500) }, 0.01, r.durationMs);
+  }
 
   // Read the final URL + caption from reel_concepts (linked via concept_id)
   const { data: concept } = await db.from('reel_concepts')

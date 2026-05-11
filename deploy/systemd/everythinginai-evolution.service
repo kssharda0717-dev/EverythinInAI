@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI - Framework Evolution Engine (monthly)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/ideation/framework_evolution.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/evolution.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/evolution.log
+TimeoutStartSec=900
+
+[Install]
+WantedBy=multi-user.target

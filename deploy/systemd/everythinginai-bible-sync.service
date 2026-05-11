@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI - Persona Bible Sync (nightly)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/persona/sync_bible.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/bible_sync.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/bible_sync.log
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
