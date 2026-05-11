@@ -7,6 +7,7 @@
  *   /go                   — user manually fires today's calendar (lure/lifestyle)
  *   /status               — print today's calendar + state
  *   /stats_<id> v=N w=N.N — log Instagram performance for a reel (views + watch time)
+ *   /weekly_stats         — multi-line: log performance for the whole week (push-based reminder)
  *   /perf                 — view ranked framework performance from last 30 days
  *   /help                 — list commands
  *
@@ -260,6 +261,8 @@ async function poll() {
         await handleGo(chatId);
       } else if (text === '/perf') {
         await handlePerf(chatId);
+      } else if (text.startsWith('/weekly_stats')) {
+        await handleWeeklyStats(chatId, text);
       } else if (text.startsWith('/stats_') || text.startsWith('/stats ')) {
         await handleStats(chatId, text);
       } else if (text.startsWith('/pick_')) {
@@ -279,6 +282,140 @@ async function poll() {
 }
 
 // ===== Analytics Feedback Loop Handlers =====
+
+/**
+ * /weekly_stats
+ * 1. views=109 watch=3.5
+ * 2. views=300 watch=6.2
+ * ...
+ *
+ * Matches each numbered line to the corresponding reel in the latest
+ * pending_check_ins row. No Concept ID required from user.
+ */
+async function handleWeeklyStats(chatId, text) {
+  const db = dbModule.getClient();
+
+  // Fetch the latest pending check-in
+  const { data: pending } = await db.from('pending_check_ins')
+    .select('key, items, created_at')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pending) {
+    await reply(chatId,
+      '❌ No pending weekly check-in found.\n\n' +
+      'The check-in is created automatically every Sunday at 7 PM IST. ' +
+      'If you need to log stats manually, use `/stats_<id> v=<views> w=<watch_sec>`.'
+    );
+    return;
+  }
+
+  const items = pending.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    await reply(chatId, '❌ No pending items in this check-in.');
+    return;
+  }
+
+  // Parse the message line by line
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const results = [];
+  const errors = [];
+
+  for (const line of lines) {
+    // Match patterns like "1. views=109 watch=3.5" or "1. Some title | views=109 watch=3.5"
+    const numberMatch = line.match(/^(\d+)\b/);
+    if (!numberMatch) continue;
+    const idx = parseInt(numberMatch[1], 10) - 1;
+    if (idx < 0 || idx >= items.length) {
+      errors.push(`Line "${line.slice(0, 50)}": no reel at position ${idx + 1}`);
+      continue;
+    }
+
+    // Extract views and watch via regex
+    const viewsMatch = line.match(/views?\s*=\s*(\d+(?:\.\d+)?)/i);
+    const watchMatch = line.match(/watch(?:_sec)?\s*=\s*(\d+(?:\.\d+)?)/i);
+    if (!viewsMatch || !watchMatch) {
+      errors.push(`Line ${idx + 1}: missing views or watch number`);
+      continue;
+    }
+
+    const views = parseInt(viewsMatch[1], 10);
+    const watchSec = parseFloat(watchMatch[1]);
+    if (isNaN(views) || isNaN(watchSec)) {
+      errors.push(`Line ${idx + 1}: invalid numbers`);
+      continue;
+    }
+
+    // Optional fields: likes, comments, shares, saves
+    const likesMatch = line.match(/likes?\s*=\s*(\d+)/i);
+    const commentsMatch = line.match(/comments?\s*=\s*(\d+)/i);
+    const sharesMatch = line.match(/shares?\s*=\s*(\d+)/i);
+    const savesMatch = line.match(/saves?\s*=\s*(\d+)/i);
+
+    const item = items[idx];
+    results.push({
+      idx: idx + 1,
+      concept_id: item.concept_id,
+      framework: item.framework,
+      title: item.title,
+      duration: item.duration,
+      views,
+      avg_watch_sec: watchSec,
+      likes: likesMatch ? parseInt(likesMatch[1], 10) : 0,
+      comments: commentsMatch ? parseInt(commentsMatch[1], 10) : 0,
+      shares: sharesMatch ? parseInt(sharesMatch[1], 10) : 0,
+      saves: savesMatch ? parseInt(savesMatch[1], 10) : 0,
+    });
+  }
+
+  if (results.length === 0) {
+    await reply(chatId,
+      '❌ Could not parse any lines. Expected format:\n\n' +
+      '`/weekly_stats`\n`1. views=109 watch=3.5`\n`2. views=300 watch=6.2`'
+    );
+    return;
+  }
+
+  // Insert all the rows
+  const records = results.map(r => ({
+    concept_id: r.concept_id,
+    framework: r.framework || 'unknown',
+    views: r.views,
+    avg_watch_sec: r.avg_watch_sec,
+    reel_duration: r.duration,
+    likes: r.likes,
+    comments: r.comments,
+    shares: r.shares,
+    saves: r.saves,
+    followers_gained: 0,
+    recorded_at: new Date().toISOString(),
+  }));
+
+  const { error: insErr } = await db.from('reel_performance').insert(records);
+  if (insErr) {
+    await reply(chatId, `❌ DB insert failed: ${insErr.message}`);
+    return;
+  }
+
+  // Clear the pending check-in
+  await db.from('pending_check_ins').delete().eq('key', pending.key);
+
+  // Build the confirmation message with retention %
+  let confirm = `✅ *Logged ${results.length} reel performance entries*\n\n`;
+  for (const r of results) {
+    const retention = r.duration > 0
+      ? Math.min(100, (r.avg_watch_sec / r.duration) * 100).toFixed(1)
+      : '?';
+    confirm += `${r.idx}. ${r.title.slice(0, 30)}\n`;
+    confirm += `   → ${r.views} views, ${r.avg_watch_sec}s watch, *${retention}%* retention\n\n`;
+  }
+  if (errors.length > 0) {
+    confirm += `⚠️ ${errors.length} line(s) had errors:\n` + errors.join('\n');
+  }
+  confirm += '\n_LLM will favor high-retention frameworks in next ideation._';
+  await reply(chatId, confirm);
+}
 
 /**
  * /stats_<id-prefix> v=<views> w=<avg_watch_sec> [l=<likes>] [c=<comments>] [s=<shares>] [sv=<saves>] [f=<followers_gained>]

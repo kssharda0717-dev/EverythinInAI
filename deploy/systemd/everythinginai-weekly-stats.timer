@@ -1,0 +1,11 @@
+[Unit]
+Description=EverythinInAI — Weekly Stats Reminder Timer (Sunday 19:00 IST = 13:30 UTC)
+Requires=everythinginai-weekly-stats.service
+
+[Timer]
+# Sunday at 13:30 UTC = 19:00 IST (UTC+5:30)
+OnCalendar=Sun *-*-* 13:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
