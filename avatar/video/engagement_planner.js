@@ -24,42 +24,49 @@ function planEngagement(cues, concept) {
 
   const totalDuration = words.length > 0 ? words[words.length - 1].end : 0;
 
-  // ─── B-roll #1: early in the Reel, on first entity mention ────────────────
-  if (concept.signal_url && concept.entities && concept.entities.length > 0) {
-    const firstEntity = concept.entities[0]?.toLowerCase()?.split(' ')[0];
-    if (firstEntity) {
-      for (let i = 0; i < words.length; i++) {
-        if (words[i].text.toLowerCase().includes(firstEntity)) {
-          if (words[i].start >= 3 && words[i].start <= totalDuration - 3) {
-            plan.broll_cuts.push({
-              at_sec: Math.max(0, words[i].start - 0.2),
-              duration: 1.6,
-              source_url: concept.signal_url,
-              type: 'screenshot',
-            });
-            plan.sfx_events.push({ at_sec: Math.max(0, words[i].start - 0.2), type: 'cut_transition' });
-            break;
-          }
-        }
-      }
-    }
-  }
+  // ─── High-Retention Visual Rhythm (8-15s reels) ─────────────────────────
+  // We MUST break the static talking head within the first 3 seconds.
 
-  // ─── B-roll #2: mid-Reel screenshot (~55% mark) ───────────────────────────
-  if (concept.signal_url && totalDuration > 8) {
-    const at = totalDuration * 0.55;
+  // 1. First B-roll Cut: The "Proof" (at 2.0s - 2.5s)
+  // Cuts away from Rhea to show the tool/signal URL, proving the hook is real.
+  if (concept.signal_url && totalDuration > 4) {
+    const firstCutSec = Math.min(2.2, totalDuration * 0.25);
     plan.broll_cuts.push({
-      at_sec: at,
-      duration: 1.2,
+      at_sec: firstCutSec,
+      duration: 1.8,
       source_url: concept.signal_url,
       type: 'screenshot',
     });
-    plan.sfx_events.push({ at_sec: at, type: 'cut_transition' });
+    plan.sfx_events.push({ at_sec: firstCutSec, type: 'cut_transition' });
+  }
+
+  // 2. The Zoom Punch: The "Wake Up" (at ~60% mark)
+  // A sudden slight zoom in on Rhea's face to reset attention before the punchline.
+  if (totalDuration > 7) {
+    const punchSec = totalDuration * 0.60;
+    plan.zoom_punches.push({
+      from_sec: punchSec,
+      to_sec: punchSec + 2.0,
+      zoom_factor: 1.15,
+    });
+    plan.sfx_events.push({ at_sec: punchSec, type: 'punch' });
+  }
+
+  // 3. Second B-roll Cut (Optional, for slightly longer reels > 12s)
+  if (concept.signal_url && totalDuration > 12) {
+    const secondCutSec = totalDuration * 0.80;
+    plan.broll_cuts.push({
+      at_sec: secondCutSec,
+      duration: 1.5,
+      source_url: concept.signal_url,
+      type: 'screenshot',
+    });
+    plan.sfx_events.push({ at_sec: secondCutSec, type: 'cut_transition' });
   }
 
   // ─── End hook punch ──────────────────────────────────────────────────────
   if (totalDuration > 5) {
-    const lastStart = Math.max(0, totalDuration - 3);
+    const lastStart = Math.max(0, totalDuration - 2);
     plan.sfx_events.push({ at_sec: lastStart, type: 'punch' });
   }
 
