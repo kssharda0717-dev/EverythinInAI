@@ -63,7 +63,8 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
    'Rewatch-driven: ends with sentence that flows back to start',
    'Engineer the script so the last sentence flows grammatically into the first. The viewer rewatches without realizing. Hook and punch must form a loop.',
    '...and that is exactly why → ChatGPT will be obsolete by next year.',
-   1, 'Initial framework - Loops boost rewatch rate which Instagram weights heavily');
+   1, 'Initial framework - Loops boost rewatch rate which Instagram weights heavily')
+ON CONFLICT (slug) DO NOTHING;
 
 -- LURE STREAM (Friday) - photo posts, slice-of-life, desirable, classy
 INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_template, example_hook, generation, reasoning) VALUES
@@ -95,7 +96,8 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
   ('vacation_stroll', 'lure', 'Vacation Stroll',
    'Walking down a European cobblestone street at dusk',
    'Generate a Lure photo concept where Rhea is walking down a European-style cobblestone street at dusk. Looking back over shoulder with inviting smile. Fairy lights in background. Outfit: chic summer evening, off-shoulder top + flowing skirt. Vibe: travel envy.',
-   'I should travel more', 1, 'Vacation content triggers escapism and envy');
+   'I should travel more', 1, 'Vacation content triggers escapism and envy')
+ON CONFLICT (slug) DO NOTHING;
 
 -- LIFESTYLE STREAM (Sat-Sun) - video posts, action, jealousy, aspirational
 INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_template, example_hook, generation, reasoning) VALUES
@@ -127,4 +129,5 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
   ('cozy_sunday_dance', 'lifestyle', 'Cozy Sunday Dance',
    'Twirling playfully in a minimalist apartment',
    'Generate a Lifestyle video concept where Rhea is twirling and dancing playfully in a beautiful minimalist apartment. Captured mid-laugh, hair flowing dynamically. Warm evening light. Outfit: flowing silk slip dress, bare feet. Music: upbeat indie pop. Vibe: pure unfiltered joy.',
-   'Sunday self-care', 1, 'Joyful candid content makes the audience parasocially fall in love');
+   'Sunday self-care', 1, 'Joyful candid content makes the audience parasocially fall in love')
+ON CONFLICT (slug) DO NOTHING;
