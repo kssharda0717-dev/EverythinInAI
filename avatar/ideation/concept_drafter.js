@@ -39,7 +39,7 @@ function parseJSON(rawText) {
   throw new Error(`Could not parse Gemini JSON. First 500 chars: ${rawText.substring(0, 500)}`);
 }
 
-function buildPrompt(persona, signal, lureLevel, perfStats = null) {
+function buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType) {
   let perfBlock = '';
   if (perfStats && perfStats.length > 0) {
     perfBlock = `
@@ -57,74 +57,104 @@ STRATEGIST INSTRUCTIONS:
 `;
   }
 
-  return `${persona.system_prompt}
-${perfBlock}
-═══════════════════════════════════════════════════════════════
-TASK: Draft 3 distinct Reel concepts for the following signal.
+  const frameworksList = activeFrameworks.map(f => 
+    `- ${f.slug} (${f.display_name}): ${f.prompt_template} (Example: "${f.example_hook}")`
+  ).join('\n');
+
+  let taskBlock = '';
+  let outputSchema = '';
+
+  if (streamType === 'tech') {
+    taskBlock = `
+TASK: Draft 3 distinct Tech Reel concepts for the following signal.
 ═══════════════════════════════════════════════════════════════
 
 SIGNAL:
 - type: ${signal.type}${signal.subtype ? ' / ' + signal.subtype : ''}
 - title: ${signal.title}
 - summary: ${signal.summary || '(none)'}
-- narrative: ${signal.narrative || '(none)'}
 - url: ${signal.url}
-- entities: ${(signal.entities || []).join(', ') || '(none)'}
-- topics: ${(signal.topics || []).join(', ') || '(none)'}
-- avatar_angles (suggestions from classifier): ${(signal.avatar_angles || []).join(', ') || '(none)'}
-- virality_score (classifier): ${signal.virality_score}/10
-
-LURE LEVEL FOR TODAY: ${lureLevel}/4
-${lureLevel >= 3
-  ? '→ This is a "magnet" Reel. Avi looks her best (editorial styling). Visually striking but never crosses into thirst-trap. Cleavage subtle, body-fitting outfits, studio lighting.'
-  : '→ This is a "substance" Reel. Avi in an oversized blazer, ribbed knit, or fitted simple top. Focus is the IDEA, not the outfit. Cozy minimal apartment / library / coffee-shop setting.'}
 
 REQUIREMENTS:
-1. Generate exactly 3 distinct concept variants. Each MUST follow a different VIRAL FRAMEWORK to maximize retention on a new account.
-   Choose 3 from these 5 frameworks:
-   - Framework 1: SECRET_WEAPON (High Saves) - "Stop paying for [X]. Use this instead."
-   - Framework 2: INDUSTRY_KILLER (High Shares) - "If you are a [Profession], this new AI is coming for your job."
-   - Framework 3: I_TESTED_IT (High Watch Time) - "Everyone is talking about [Tool], so I actually tested it."
-   - Framework 4: CONTRARIAN_TRUTH (High Comments) - "Everyone is using [Popular Tool] wrong."
-   - Framework 5: SEAMLESS_LOOP (High Rewatch) - The last sentence must grammatically flow directly into the first sentence.
+1. Choose 3 DIFFERENT frameworks from this active registry:
+${frameworksList}
 
 2. For each concept, return:
-   - title: a working title (max 60 chars) — internal use
-   - hook: 1-2 short punchy sentences (max 10 words). MUST stop the scroll instantly. BANNED PHRASES: "Hey guys", "Did you know", "Just saw", "Today I'm", "Look at this", "Yaar".
-   - body_script: EXACTLY 1 or 2 short sentences delivering the pure value. NO FLUFF. NO FILLER. ~5-7 seconds at natural pace (~15-25 words).
-   - punchline: The "Open Loop" ending. MUST NOT restate the body. End on a cliffhanger or controversial take. ~3 seconds.
-   - cta: a short call-to-action like "Comment LINK and I'll DM you the repo".
-   - full_script: the concatenation of hook + body_script + punchline + cta. YOU MUST INCLUDE THE CTA IN THE FULL_SCRIPT SO SHE SAYS IT OUT LOUD. Total script MUST BE UNDER 50 WORDS.
-   - estimated_seconds: integer, target 8-15 seconds MAX.
-   - b_roll_plan: array of 2 objects, each = {start_sec, end_sec, description}. Describe exactly what B-roll (screenshot, UI clip, meme) should interrupt the talking head. The first B-roll MUST start before second 3.
-   - caption: Instagram caption, 2-3 lines, hook-style opening, soft CTA at end. Max 150 chars. Use 0-1 emojis.
-   - hashtags: array of 5-8 hashtags. Mix of high-volume (#AI) and niche.
-   - lure_level: integer matching today's lure level (${lureLevel}).
-   - angle: the name of the viral framework used (e.g., "secret_weapon").
+   - title: working title (max 60 chars)
+   - hook: 1-2 short punchy sentences. MUST stop scroll. BANNED: "Hey guys", "Did you know", "Just saw".
+   - body_script: EXACTLY 1-2 short sentences delivering pure value. NO FLUFF.
+   - punchline: Open loop ending. MUST NOT restate body.
+   - cta: e.g., "Comment LINK and I'll DM you the repo".
+   - full_script: hook + body_script + punchline + cta. MUST BE UNDER 50 WORDS.
+   - estimated_seconds: 8-15.
+   - b_roll_plan: array of {start_sec, end_sec, description}. First B-roll MUST start before second 3.
+   - caption: Instagram caption. Max 150 chars.
+   - hashtags: array of 5-8 hashtags.
+   - angle: the slug of the framework used.
+   - lure_level: ${lureLevel}.
 
-3. Each concept must be extremely FAST-PACED. The goal is >70% retention. No wasted words.
-
-4. STRICTLY follow Rhea's voice rules. No banned phrases.
-
-5. CRITICAL CTA RULES — the punchline AND the caption MUST end with one of these DM-funnel CTAs (pick the most natural):
-   - "Comment LINK and I'll DM you the repo"
-   - "Comment GUIDE and I'll DM you the breakdown"
-   - "Comment RHEA and I'll DM you my notes on this"
-   - "Comment YES and I'll DM you the demo"
-   The CTA MUST direct viewers to comment a specific keyword to get a DM. NEVER use: "Link in bio", "What do you think", "Follow for more".
-
-6. Caption MUST END with: "— everythinginai.com" on its own line.
-
-7. Return ONLY valid JSON. No markdown fences. No prose outside the JSON.
-
-OUTPUT SCHEMA:
-{
+3. CRITICAL CTA RULES: The punchline AND caption MUST end with a DM-funnel CTA ("Comment [KEYWORD]"). NEVER use "Link in bio".
+`;
+    outputSchema = `{
   "concepts": [
-    { "title": "...", "hook": "...", "body_script": "...", "punchline": "...", "full_script": "...", "estimated_seconds": 12, "b_roll_plan": [...], "caption": "...", "hashtags": [...], "cta": "...", "lure_level": ${lureLevel}, "angle": "secret_weapon" },
-    { ... },
-    { ... }
+    { "title": "...", "hook": "...", "body_script": "...", "punchline": "...", "full_script": "...", "estimated_seconds": 12, "b_roll_plan": [...], "caption": "...", "hashtags": [...], "cta": "...", "lure_level": ${lureLevel}, "angle": "secret_weapon" }
   ]
 }`;
+  } else if (streamType === 'lure') {
+    taskBlock = `
+TASK: Draft 3 distinct Lure Photo concepts for Friday.
+═══════════════════════════════════════════════════════════════
+
+REQUIREMENTS:
+1. Choose 3 DIFFERENT frameworks from this active registry:
+${frameworksList}
+
+2. For each concept, return:
+   - title: working title
+   - image_prompt: A highly detailed image generation prompt describing the scene, lighting, outfit, and vibe based on the framework. Must include "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator."
+   - caption: Instagram caption matching the vibe.
+   - hashtags: array of 5-8 lifestyle/aesthetic hashtags.
+   - angle: the slug of the framework used.
+   - lure_level: ${lureLevel}.
+`;
+    outputSchema = `{
+  "concepts": [
+    { "title": "...", "image_prompt": "...", "caption": "...", "hashtags": [...], "lure_level": ${lureLevel}, "angle": "mirror_selfie_classy" }
+  ]
+}`;
+  } else if (streamType === 'lifestyle') {
+    taskBlock = `
+TASK: Draft 3 distinct Lifestyle Action Video concepts for the weekend.
+═══════════════════════════════════════════════════════════════
+
+REQUIREMENTS:
+1. Choose 3 DIFFERENT frameworks from this active registry:
+${frameworksList}
+
+2. For each concept, return:
+   - title: working title
+   - keyframe_prompt: A highly detailed image prompt for the static starting frame. Must include "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator."
+   - motion_prompt: Instructions for the AI video generator on how to animate the keyframe (e.g., "smooth camera pan, hair blowing in wind, lifting kettlebell").
+   - music_mood: 'upbeat', 'calm', or 'energetic'.
+   - caption: Instagram caption.
+   - hashtags: array of 5-8 lifestyle hashtags.
+   - angle: the slug of the framework used.
+   - lure_level: ${lureLevel}.
+`;
+    outputSchema = `{
+  "concepts": [
+    { "title": "...", "keyframe_prompt": "...", "motion_prompt": "...", "music_mood": "upbeat", "caption": "...", "hashtags": [...], "lure_level": ${lureLevel}, "angle": "gym_workout" }
+  ]
+}`;
+  }
+
+  return `${persona.system_prompt}
+${perfBlock}
+${taskBlock}
+
+Return ONLY valid JSON matching this schema:
+${outputSchema}
+`;`;
 }
 
 async function getPerformanceStats() {
@@ -163,10 +193,21 @@ async function getPerformanceStats() {
   }
 }
 
-async function draftConcepts(signal, lureLevel = 2, retries = 2) {
+async function draftConcepts(signal, lureLevel = 2, streamType = 'tech', retries = 2) {
   const persona = await personaService.getActivePersona();
   const perfStats = await getPerformanceStats();
-  const prompt = buildPrompt(persona, signal, lureLevel, perfStats);
+  
+  const db = require('../../engine/core/database').getClient();
+  const { data: activeFrameworks } = await db.from('content_frameworks')
+    .select('*')
+    .eq('stream', streamType)
+    .eq('is_active', true);
+    
+  if (!activeFrameworks || activeFrameworks.length === 0) {
+    throw new Error(`No active frameworks found for stream: ${streamType}`);
+  }
+
+  const prompt = buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType);
 
   const apiKey = config.gemini.apiKey;
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');

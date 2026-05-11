@@ -150,13 +150,18 @@ async function runLurePhoto(calendarRow) {
 
 async function runLifestyleReel(calendarRow) {
   log.info(`════ LIFESTYLE REEL pipeline ════`);
+  // Prefer LLM-drafted concept (post-Phase 16) by passing the calendar id.
+  // The worker will look up the concept via the calendar row's concept_id and use the LLM's keyframe_prompt + motion_prompt.
+  // Falls back to hardcoded mood rotation if no concept exists.
   const moods = ['morning_routine', 'cafe', 'working', 'golden_hour', 'reading'];
-  // Pick a mood deterministically per week to add variety
   const week = Math.floor(Date.now() / (7 * 24 * 60 * 60 * 1000));
-  const mood = moods[week % moods.length];
-  log.info(`Mood: ${mood}`);
+  const fallbackMood = moods[week % moods.length];
+  log.info(`Calendar=${calendarRow.id}  fallbackMood=${fallbackMood}`);
 
-  const r = runScript('avatar/lifestyle/lifestyle_worker.js', [`--mood=${mood}`]);
+  const r = runScript('avatar/lifestyle/lifestyle_worker.js', [
+    `--calendar=${calendarRow.id}`,
+    `--mood=${fallbackMood}`,
+  ]);
   if (!r.ok) throw new Error('lifestyle_worker failed');
 
   // Lifestyle worker logs the URL but doesn't write to DB; we have to grep the stdout

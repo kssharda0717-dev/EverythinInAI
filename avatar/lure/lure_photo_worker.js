@@ -71,11 +71,12 @@ const SCENES = {
 };
 
 function parseArgs(argv) {
-  const args = { scene: null, calendarId: null, dryRun: false };
+  const args = { scene: null, calendarId: null, conceptId: null, dryRun: false };
   for (const a of argv.slice(2)) {
     if (a === '--dry-run') args.dryRun = true;
     else if (a.startsWith('--scene=')) args.scene = a.split('=')[1];
     else if (a.startsWith('--calendar=')) args.calendarId = a.split('=')[1];
+    else if (a.startsWith('--concept=')) args.conceptId = a.split('=')[1];
   }
   return args;
 }
@@ -95,6 +96,23 @@ function buildPrompt(sceneKey, persona, trigger) {
     `Wearing: ${scene.outfit}.`,
     `Photographic style: shot on iPhone 15 Pro, casual Instagram influencer aesthetic, photorealistic ultra-detailed natural skin texture, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
   ].join(' ');
+}
+
+/**
+ * NEW: Build a prompt directly from the LLM-generated image_prompt on the concept.
+ * This is used when the lure photo is part of an LLM-drafted concept (post-Phase 16).
+ */
+function buildPromptFromConcept(concept, trigger) {
+  let prompt = concept.image_prompt || '';
+  // Ensure the LoRA trigger token is present
+  if (!prompt.includes(trigger) && !prompt.includes('AVI_TOK')) {
+    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. ${prompt}`;
+  }
+  // Reinforce style if the LLM forgot
+  if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
+    prompt += ' Shot on iPhone 15 Pro, casual Instagram influencer aesthetic, photorealistic ultra-detailed natural skin texture, candid documentary feel.';
+  }
+  return prompt;
 }
 
 async function renderLurePhoto({ persona, sceneKey, calendarId }) {
@@ -130,12 +148,75 @@ async function main() {
     process.exit(1);
   }
 
+  const trigger = persona.active_lora_trigger || 'AVI_TOK';
+  const db = dbModule.getClient();
+
+  // ===== NEW PATH: If a concept_id is provided, use the LLM-generated image_prompt =====
+  let concept = null;
+  if (args.conceptId) {
+    const { data } = await db.from('reel_concepts').select('*').eq('id', args.conceptId).maybeSingle();
+    concept = data;
+  } else if (args.calendarId) {
+    const { data: cal } = await db.from('content_calendar').select('concept_id').eq('id', args.calendarId).maybeSingle();
+    if (cal?.concept_id) {
+      const { data } = await db.from('reel_concepts').select('*').eq('id', cal.concept_id).maybeSingle();
+      concept = data;
+    }
+  }
+
+  if (concept && concept.image_prompt) {
+    log.info(`Using LLM-generated image_prompt from concept ${concept.id} (angle: ${concept.angle})`);
+    const prompt = buildPromptFromConcept(concept, trigger);
+
+    if (args.dryRun) {
+      log.info(`DRY RUN — would render with prompt:`);
+      log.info(prompt);
+      return;
+    }
+
+    const seed = Math.floor(Math.random() * 1_000_000);
+    const result = await runModel('flux_dev_lora', {
+      prompt,
+      lora_weights: persona.active_lora_url,
+      lora_scale: 1.0,
+      aspect_ratio: '4:5',
+      num_outputs: 1,
+      num_inference_steps: 28,
+      guidance: 3.0,
+      output_format: 'webp',
+      output_quality: 95,
+      go_fast: false,
+      seed,
+    }, { timeoutMs: 240_000 });
+
+    const remoteUrl = result.output[0];
+    const destPath = `lure-photos/${new Date().toISOString().slice(0, 10)}/${concept.angle || 'concept'}-${Date.now()}.webp`;
+    const hosted = await rehostImage(remoteUrl, destPath);
+
+    log.info(`══════════════════════════════════════════════`);
+    log.info(`✓ Lure photo rendered (LLM-driven framework: ${concept.angle}).`);
+    log.info(`   url   : ${hosted.publicUrl}`);
+    log.info(`   cost  : ~$${result.cost_usd.toFixed(3)}`);
+
+    if (args.calendarId) {
+      await db.from('content_calendar').update({
+        output_url: hosted.publicUrl, state: 'done', completed_at: new Date().toISOString(),
+        cost_usd: result.cost_usd, updated_at: new Date().toISOString(),
+      }).eq('id', args.calendarId);
+      log.info(`   calendar row ${args.calendarId} marked done`);
+    }
+    console.log(JSON.stringify({ ok: true, url: hosted.publicUrl, sceneKey: concept.angle, sceneLabel: concept.title, costUsd: result.cost_usd }));
+    return;
+  }
+
+  // ===== LEGACY PATH: hardcoded scene (used as fallback if no concept) =====
+  log.warn('No concept with image_prompt found. Falling back to hardcoded SCENES rotation.');
   const sceneKey = (args.scene && SCENES[args.scene]) ? args.scene : pickSceneForToday();
   log.info(`Scene: ${sceneKey} — ${SCENES[sceneKey].label}`);
 
   if (args.dryRun) {
     log.info(`DRY RUN — would render with prompt:`);
-    log.info(buildPrompt(sceneKey, persona, persona.active_lora_trigger || 'AVI_TOK'));
+    log.info(buildPrompt(sceneKey, persona, trigger));
     return;
   }
 

@@ -112,10 +112,12 @@ const MOODS = {
 };
 
 function parseArgs(argv) {
-  const args = { mood: null, dryRun: false };
+  const args = { mood: null, conceptId: null, calendarId: null, dryRun: false };
   for (const a of argv.slice(2)) {
     if (a === '--dry-run') args.dryRun = true;
     else if (a.startsWith('--mood=')) args.mood = a.split('=')[1];
+    else if (a.startsWith('--concept=')) args.conceptId = a.split('=')[1];
+    else if (a.startsWith('--calendar=')) args.calendarId = a.split('=')[1];
   }
   return args;
 }
@@ -127,12 +129,16 @@ function pickMood(forceKey) {
 }
 
 function buildHeroPrompt(mood, trigger) {
+  // If the LLM-generated keyframe prompt already includes the trigger, use it directly.
+  if (mood.keyframe_prompt && mood.keyframe_prompt.includes(trigger)) {
+    return mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '') + ' Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.';
+  }
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
     mood.keyframe_prompt + '.',
-    `Wearing: ${mood.outfit}.`,
+    mood.outfit ? `Wearing: ${mood.outfit}.` : '',
     `Photographic style: cinematic action photograph, shot on Sony A7R IV with 50mm prime at f/2.0, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.`,
-  ].join(' ');
+  ].filter(Boolean).join(' ');
 }
 
 async function renderHeroImage({ persona, mood, trigger, runId }) {
@@ -202,9 +208,45 @@ async function main() {
     process.exit(1);
   }
 
-  const moodKey = pickMood(args.mood);
-  const mood = MOODS[moodKey];
   const trigger = persona.active_lora_trigger || 'AVI_TOK';
+  const db = dbModule.getClient();
+
+  // ===== NEW PATH: LLM-generated concept =====
+  let concept = null;
+  if (args.conceptId) {
+    const { data } = await db.from('reel_concepts').select('*').eq('id', args.conceptId).maybeSingle();
+    concept = data;
+  } else if (args.calendarId) {
+    const { data: cal } = await db.from('content_calendar').select('concept_id').eq('id', args.calendarId).maybeSingle();
+    if (cal?.concept_id) {
+      const { data } = await db.from('reel_concepts').select('*').eq('id', cal.concept_id).maybeSingle();
+      concept = data;
+    }
+  }
+
+  let mood;
+  let moodKey;
+  if (concept && concept.keyframe_prompt && concept.motion_prompt) {
+    log.info(`Using LLM-generated lifestyle prompts from concept ${concept.id} (angle: ${concept.angle})`);
+    moodKey = concept.angle || 'llm_concept';
+    // Build the mood object from concept fields. The LLM's prompts override the static MOODS map.
+    let kfPrompt = concept.keyframe_prompt;
+    if (!kfPrompt.includes(trigger) && !kfPrompt.includes('AVI_TOK')) {
+      kfPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. ${kfPrompt}`;
+    }
+    mood = {
+      label: concept.title || 'LLM Lifestyle Concept',
+      keyframe_prompt: kfPrompt,
+      motion_prompt: concept.motion_prompt,
+      outfit: '',  // LLM bakes outfit into the keyframe prompt
+      music_mood: concept.music_mood || 'upbeat',
+    };
+  } else {
+    // ===== LEGACY PATH: hardcoded mood =====
+    log.warn('No concept with keyframe_prompt found. Falling back to hardcoded MOODS.');
+    moodKey = pickMood(args.mood);
+    mood = MOODS[moodKey];
+  }
 
   const runId = `${moodKey}-${Date.now()}`;
   log.info(`Lifestyle Reel run ${runId}  mood=${moodKey} (${mood.label})`);

@@ -60,20 +60,21 @@ async function main() {
   log.info(`Daily ideation run for ${today}${args.dryRun ? ' (DRY RUN)' : ''}`);
   log.info(`══════════════════════════════════════════════════════════════`);
 
-  // 0. Day-aware short-circuit: only fire on tech-reel days (Mon-Thu)
+  // Map content_type to our streamType for the LLM
   const { weekday, weekdayName, contentType } = getContentTypeForDate(new Date());
   log.info(`Today is ${weekdayName} → scheduled content type: ${contentType}`);
-  if (contentType !== 'tech_reel') {
-    log.info(`Today (${weekdayName}) is not a tech-reel day. Ideation skipped.`);
-    if (!args.dryRun) {
-      // Still ensure today's calendar row exists for the lure/lifestyle workflow
-      try { await ensureTodaysCalendarRow(); } catch (e) { log.warn(`calendar ensure failed: ${e.message}`); }
-      try { await sendStatus(`ℹ️ Today is ${weekdayName} — ${contentType.replace('_', ' ')} day. Reply /go to fire it.`); } catch {}
-    }
+  
+  let streamType = null;
+  if (contentType === 'tech_reel') streamType = 'tech';
+  else if (contentType === 'lure_photo') streamType = 'lure';
+  else if (contentType === 'lifestyle_reel') streamType = 'lifestyle';
+
+  if (!streamType) {
+    log.warn(`Unknown content_type: ${contentType}. Skipping ideation.`);
     return;
   }
 
-  // Tech-reel day: ensure calendar row + run ideation
+  // Ensure today's calendar row exists
   if (!args.dryRun) {
     try { await ensureTodaysCalendarRow(); } catch (e) { log.warn(`calendar ensure failed: ${e.message}`); }
   }
@@ -109,18 +110,25 @@ async function main() {
     return;
   }
 
-  // 4. Pick top signals
-  const candidates = await pickTopSignals(persona.id, { limit: 1 });
-  if (candidates.length === 0) {
-    log.error('No signals available for ideation.');
-    await sendStatus(`⚠ Ideation skipped — no fresh signals available for ${today}`);
-    return;
+  // 4. Pick top signal (only required for tech stream)
+  let chosen = null;
+  if (streamType === 'tech') {
+    const candidates = await pickTopSignals(persona.id, { limit: 1 });
+    if (candidates.length === 0) {
+      log.error('No signals available for tech ideation.');
+      await sendStatus(`⚠ Ideation skipped — no fresh signals available for ${today}`);
+      return;
+    }
+    chosen = candidates[0];
+    log.info(`Chosen signal: [${chosen.signal.type}] ${chosen.signal.title} (score=${chosen.score})`);
+  } else {
+    // Lure / Lifestyle don't need a tech signal; we draft purely from frameworks + persona
+    chosen = { signal: { id: null, type: streamType, title: `${streamType} ideation`, summary: '', url: '', entities: [], topics: [], avatar_angles: [], virality_score: 8 }, score: 0 };
+    log.info(`Stream=${streamType}: drafting concepts purely from frameworks (no signal needed)`);
   }
-  const chosen = candidates[0];
-  log.info(`Chosen signal: [${chosen.signal.type}] ${chosen.signal.title} (score=${chosen.score})`);
 
-  // 5. Draft concepts
-  const { concepts, meta } = await draftConcepts(chosen.signal, lureLevel);
+  // 5. Draft concepts (LLM picks from active frameworks for this stream)
+  const { concepts, meta } = await draftConcepts(chosen.signal, lureLevel, streamType);
 
   // 6. Persist concepts
   const conceptIds = [];
@@ -128,26 +136,35 @@ async function main() {
     for (let i = 0; i < concepts.length; i++) {
       const c = concepts[i];
       const insert = {
-        persona_id:      persona.id,
-        signal_id:       chosen.signal.id,
-        target_date:     today,
-        state:           'draft',
-        is_winner:       false,
-        title:           (c.title || `Concept ${String.fromCharCode(65 + i)}`).slice(0, 200),
-        hook:            c.hook || '',
-        body_script:     c.body_script || '',
-        punchline:       c.punchline || '',
-        full_script:     c.full_script || `${c.hook}\n\n${c.body_script}\n\n${c.punchline}`,
-        estimated_seconds: c.estimated_seconds || 30,
-        keyframes:       c.keyframes || [],
-        caption:         c.caption || '',
-        hashtags:        c.hashtags || [],
-        cta:             c.cta || '',
-        lure_level:      c.lure_level || lureLevel,
-        angle:           c.angle || (i === 0 ? 'hot_take' : i === 1 ? 'explainer' : 'humor'),
-        model:           meta.model,
-        prompt_tokens:   meta.prompt_tokens,
-        output_tokens:   meta.output_tokens,
+        persona_id:        persona.id,
+        signal_id:         chosen.signal.id,
+        target_date:       today,
+        content_type:      contentType,
+        state:             'draft',
+        is_winner:         false,
+        title:             (c.title || `Concept ${String.fromCharCode(65 + i)}`).slice(0, 200),
+        // Tech-stream fields
+        hook:              c.hook || '',
+        body_script:       c.body_script || '',
+        punchline:         c.punchline || '',
+        full_script:       c.full_script || (c.hook ? `${c.hook}\n\n${c.body_script}\n\n${c.punchline}` : ''),
+        estimated_seconds: c.estimated_seconds || (streamType === 'tech' ? 12 : null),
+        keyframes:         c.keyframes || [],
+        cta:               c.cta || '',
+        // Lure-stream field
+        image_prompt:      c.image_prompt || null,
+        // Lifestyle-stream fields
+        keyframe_prompt:   c.keyframe_prompt || null,
+        motion_prompt:     c.motion_prompt || null,
+        music_mood:        c.music_mood || null,
+        // Common fields
+        caption:           c.caption || '',
+        hashtags:          c.hashtags || [],
+        lure_level:        c.lure_level || lureLevel,
+        angle:             c.angle || 'unknown',
+        model:             meta.model,
+        prompt_tokens:     meta.prompt_tokens,
+        output_tokens:     meta.output_tokens,
       };
       const { data, error } = await db.from('reel_concepts').insert(insert).select('id').single();
       if (error) {

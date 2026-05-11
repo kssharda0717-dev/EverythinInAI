@@ -87,15 +87,16 @@ async function handlePick(chatId, idPrefix) {
       concepts.map(c => `• \`${c.id.slice(0, 8)}\``).join('\n'));
   }
 
-  // Make sure today's calendar row is a tech_reel
+  // Find today's calendar row for any content type. Pick is now allowed for tech, lure, AND lifestyle days.
   const { data: calRow } = await db.from('content_calendar')
     .select('*')
     .eq('target_date', today)
-    .eq('content_type', 'tech_reel')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (!calRow) {
-    return reply(chatId, `❌ Today (${today}) is not a tech-reel day. Today's calendar slot is a different content type.`);
+    return reply(chatId, `❌ No calendar row for today (${today}). Did the planner cron run?`);
   }
   if (calRow.state === 'rendering') {
     return reply(chatId, `⚠️ Today's render is already in progress (state=rendering). Wait for completion.`);
@@ -141,6 +142,7 @@ async function handleGo(chatId) {
   if (!calRow) {
     return reply(chatId, `❌ No calendar row for today (${today}). Run the planner cron first.`);
   }
+  // Tech-reel days require a /pick. Lure & lifestyle days can also be picked or just /go'd.
   if (calRow.content_type === 'tech_reel') {
     return reply(chatId, `⚠️ Today is a tech-reel day. Use \`/pick_<id>\` to choose a concept first.`);
   }
