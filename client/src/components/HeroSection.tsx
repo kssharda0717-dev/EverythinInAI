@@ -134,11 +134,11 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
           transition={{ delay: 0.2, type: "spring", stiffness: 100, damping: 20 }}
           className="text-display text-foreground mb-4"
         >
-          Discover the{" "}
+          The AI tools{" "}
           <span className="bg-gradient-to-r from-[oklch(0.55_0.18_230)] to-[oklch(0.65_0.15_185)] bg-clip-text text-transparent">
-            future
-          </span>{" "}
-          of AI
+            index
+          </span>
+          .
         </motion.h1>
 
         {/* Subtitle */}
@@ -148,8 +148,8 @@ export default function HeroSection({ onSearch, toolCount }: HeroSectionProps) {
           transition={{ delay: 0.3, type: "spring", stiffness: 100, damping: 20 }}
           className="text-subheading text-muted-foreground mb-10 max-w-xl mx-auto"
         >
-          The world's most comprehensive real-time directory of AI tools.
-          Refreshed every 6 hours, with daily backfill.
+          {toolCount.toLocaleString()} AI tools, vetted and indexed in real time. 
+          Find what your competitors don't know yet.
         </motion.p>
 
         {/* Search Bar */}

@@ -92,30 +92,34 @@ export default function FeaturedCarousel({ tools, onToolClick }: FeaturedCarouse
                 onClick={() => onToolClick(tool)}
                 className="shrink-0 w-[320px] sm:w-[360px] snap-start cursor-pointer"
               >
-                <div className="relative rounded-3xl overflow-hidden bg-gradient-to-br from-[oklch(0.15_0.01_260)] to-[oklch(0.25_0.03_230)] h-[200px] p-6 flex flex-col justify-end group">
-                  {/* Background mesh gradient */}
+                <div className="relative rounded-3xl overflow-hidden bg-white h-[200px] p-6 flex flex-col justify-end group elevation-1 group-hover:elevation-3 transition-shadow duration-300">
+                  {/* Subtle glacier glow accent in top-right */}
                   <div
-                    className="absolute inset-0 opacity-30 bg-cover bg-center"
+                    className="absolute -top-16 -right-16 w-48 h-48 rounded-full opacity-40 pointer-events-none"
                     style={{
-                      backgroundImage: `url(https://d2xsxph8kpxj0f.cloudfront.net/310519663529896497/QBqeAVQQED5JYrhp7rE5AR/abstract-mesh-gradient-4uLazc2jw95wUsgYWapbQQ.webp)`,
+                      background: "radial-gradient(circle, oklch(0.85 0.12 230 / 30%) 0%, transparent 60%)",
                     }}
                   />
 
-                  {/* Gradient overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-t from-[oklch(0.10_0.01_260_/_90%)] via-[oklch(0.15_0.01_260_/_40%)] to-transparent" />
+                  {/* Rank number watermark */}
+                  <div className="absolute top-4 right-5 text-4xl font-light text-[oklch(0.92_0.005_230)] leading-none select-none">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
 
                   {/* Content */}
                   <div className="relative z-10">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[0.6rem] font-semibold tracking-wide uppercase mb-2 ${badgeClass}`}>
+                    <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-[0.65rem] font-semibold tracking-wide uppercase mb-3 ${badgeClass}`}>
                       {tool.category}
                     </span>
-                    <h3 className="text-white text-lg font-semibold mb-1">{tool.name}</h3>
-                    <p className="text-white/60 text-sm line-clamp-1">{tool.tagline}</p>
+                    <h3 className="text-foreground text-lg font-semibold mb-1.5 group-hover:text-[oklch(0.45_0.15_230)] transition-colors">
+                      {tool.displayName || tool.name}
+                    </h3>
+                    <p className="text-muted-foreground text-sm leading-relaxed line-clamp-2">{tool.tagline}</p>
                   </div>
 
                   {/* Hover arrow */}
-                  <div className="absolute top-4 right-4 w-8 h-8 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ArrowRight className="w-4 h-4 text-white" />
+                  <div className="absolute bottom-4 right-4 w-8 h-8 rounded-xl bg-[oklch(0.97_0.005_230)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ArrowRight className="w-4 h-4 text-foreground" />
                   </div>
                 </div>
               </motion.div>

@@ -25,7 +25,7 @@ export default function Footer() {
               </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed max-w-[280px]">
-              The most comprehensive real-time directory of AI tools. Refreshed every 6 hours, with daily backfill.
+              The intelligence index for AI builders. Every tool, every release, indexed in real time so you ship before the wave breaks.
             </p>
             <div className="flex items-center gap-2 mt-4">
               <a
