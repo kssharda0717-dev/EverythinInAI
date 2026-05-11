@@ -68,42 +68,58 @@ async function getConcept(db, args) {
   return null;
 }
 
-function pickOutfit(forceKey, conceptId) {
-  if (forceKey && OUTFITS[forceKey]) {
-    return { key: forceKey, value: OUTFITS[forceKey] };
-  }
-  // Deterministic per concept (same outfit if re-rendered)
-  const keys = Object.keys(OUTFITS);
+const SETTINGS = {
+  home_desk: 'clean simple out-of-focus warm-toned interior, soft plain wall with subtle warm gradient, no busy details, gentle bokeh, matte black laptop on the desk just barely visible at the edge of the frame',
+  cafe_window: 'blurred background of a quiet minimalist cafe, soft natural daylight coming from a window off-camera, warm aesthetic',
+  library_nook: 'soft out-of-focus background of wooden bookshelves with warm ambient lighting, cozy and intellectual vibe',
+  minimal_studio: 'pure soft minimalist studio background, neutral beige tone, very shallow depth of field',
+};
+
+const POSES = {
+  desk_lean: 'Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language, hands resting naturally in her lap or gently on the desk in front of her.',
+  casual_sit: 'Seated casually, shoulders relaxed, one arm resting softly on the armrest, open and conversational body language.',
+  attentive: 'Sitting straight, highly attentive posture, hands clasped loosely in front of her, engaging directly with the viewer.',
+};
+
+function pickCombo(forceOutfitKey, conceptId) {
   const hash = conceptId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-  const key = keys[hash % keys.length];
-  return { key, value: OUTFITS[key] };
+
+  const outfitKeys = Object.keys(OUTFITS);
+  const outfitKey = forceOutfitKey && OUTFITS[forceOutfitKey] ? forceOutfitKey : outfitKeys[hash % outfitKeys.length];
+
+  const settingKeys = Object.keys(SETTINGS);
+  const settingKey = settingKeys[(hash * 2) % settingKeys.length];
+
+  const poseKeys = Object.keys(POSES);
+  const poseKey = poseKeys[(hash * 3) % poseKeys.length];
+
+  return {
+    outfit:  { key: outfitKey,  value: OUTFITS[outfitKey]  },
+    setting: { key: settingKey, value: SETTINGS[settingKey] },
+    pose:    { key: poseKey,    value: POSES[poseKey]    },
+  };
 }
 
-function buildHeroPrompt(persona, outfitDescriptor, trigger) {
-  // Optimized for OmniHuman/talking-head video generation:
-  //   - Front-facing, eye-level, head + upper body in frame
-  //   - Mouth slightly relaxed/neutral (will be animated)
-  //   - Hands visible and natural (so model can animate them with gestures)
-  //   - Clean, simple, slightly out-of-focus background (less artifact risk)
+function buildHeroPrompt(persona, combo, trigger) {
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
-    `Three-quarter body framing showing head, shoulders, and upper torso including hands resting naturally in her lap or gently on the desk in front of her, palms relaxed and visible.`,
+    `Three-quarter body framing showing head, shoulders, and upper torso including hands, palms relaxed and visible.`,
     `Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging eyes.`,
-    `Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language.`,
-    `Wearing ${outfitDescriptor}.`,
-    `Background: clean simple out-of-focus warm-toned interior, soft plain wall with subtle warm gradient, no busy details, gentle bokeh, matte black laptop on the desk just barely visible at the edge of the frame.`,
+    combo.pose.value,
+    `Wearing ${combo.outfit.value}.`,
+    `Background: ${combo.setting.value}.`,
     `Lighting: soft, even, three-point editorial lighting with a warm key from camera-left and a gentle fill from camera-right, NO harsh shadows on the face, NO dramatic backlight.`,
     `Photographic style: editorial portrait, shot on Sony A7R IV with 50mm prime at f/2.8, moderate depth of field, photorealistic ultra-detailed natural skin texture with visible pores, subtle 35mm film grain, magazine-quality, Vogue India aesthetic, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
   ].join(' ');
 }
 
-async function renderHero({ persona, outfit, conceptId, dryRun }) {
+async function renderHero({ persona, combo, conceptId, dryRun }) {
   const trigger = persona.active_lora_trigger || 'AVI_TOK';
-  const prompt = buildHeroPrompt(persona, outfit.value, trigger);
+  const prompt = buildHeroPrompt(persona, combo, trigger);
 
   if (dryRun) {
     log.info(`── DRY HERO ──`);
-    log.info(`OUTFIT: ${outfit.key}`);
+    log.info(`COMBO: outfit=${combo.outfit.key} setting=${combo.setting.key} pose=${combo.pose.key}`);
     log.info(`PROMPT:\n${prompt}`);
     return { skipped: true };
   }
@@ -140,7 +156,7 @@ async function renderHero({ persona, outfit, conceptId, dryRun }) {
     seed,
     cost_usd: result.cost_usd,
     generation_ms: result.generation_ms,
-    outfit_key: outfit.key,
+    outfit_key: combo.outfit.key,
     prompt,
   };
 }
