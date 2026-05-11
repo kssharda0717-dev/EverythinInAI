@@ -1,0 +1,11 @@
+[Unit]
+Description=EverythinInAI — 48h Check-in Timer (runs hourly)
+Requires=everythinginai-checkin.service
+
+[Timer]
+# Run every hour on the hour
+OnCalendar=*-*-* *:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -44,13 +44,15 @@ function buildPrompt(persona, signal, lureLevel, perfStats = null) {
   if (perfStats && perfStats.length > 0) {
     perfBlock = `
 ═══════════════════════════════════════════════════════════════
-ANALYTICS FEEDBACK (LAST 30 DAYS):
+ANALYTICS FEEDBACK (LAST 14 DAYS - CONFIDENCE WEIGHTED):
 The following frameworks have been tested on Instagram. 
 Ranked by Average Retention Rate (higher is better):
-${perfStats.map(s => `- ${s.framework}: ${s.avgRetention}% retention (Avg Watch: ${s.avgWatch}s, Views: ${s.avgViews})`).join('\n')}
+${perfStats.map(s => `- ${s.framework}: ${s.avgRetention}% retention (Sample size: ${s.sampleSize} reels)`).join('\n')}
 
-INSTRUCTION: Heavily favor the frameworks with the highest retention rate. 
-If a framework has < 30% retention, DO NOT use it today.
+STRATEGIST INSTRUCTIONS:
+1. If a framework has high retention (>30%) AND a good sample size (>=2), use it.
+2. If a framework has low retention (<15%) AND a good sample size (>=2), DO NOT use it.
+3. EXPLORE MODE: If a framework is NOT listed above, or has a sample size of 1, you MUST try it today to gather more data.
 ═══════════════════════════════════════════════════════════════
 `;
   }
@@ -128,10 +130,11 @@ OUTPUT SCHEMA:
 async function getPerformanceStats() {
   try {
     const db = require('../../engine/core/database').getClient();
-    const thirtyDaysAgo = new Date(Date.now() - 30*24*60*60*1000).toISOString();
+    // Decay: Only look at the last 14 days so old trends don't dominate
+    const fourteenDaysAgo = new Date(Date.now() - 14*24*60*60*1000).toISOString();
     const { data: rows } = await db.from('reel_performance')
       .select('framework, views, avg_watch_sec, retention_pct')
-      .gte('recorded_at', thirtyDaysAgo);
+      .gte('recorded_at', fourteenDaysAgo);
     
     if (!rows || rows.length === 0) return null;
 
@@ -148,6 +151,7 @@ async function getPerformanceStats() {
     return Object.entries(agg)
       .map(([f, a]) => ({
         framework: f,
+        sampleSize: a.count,
         avgViews: Math.round(a.views / a.count),
         avgWatch: (a.watch / a.count).toFixed(1),
         avgRetention: (a.retention / a.count).toFixed(1),

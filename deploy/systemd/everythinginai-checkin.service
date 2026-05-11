@@ -1,0 +1,17 @@
+[Unit]
+Description=EverythinInAI — 48h Check-in Announcer (Hourly poll)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ubuntu
+WorkingDirectory=/home/ubuntu/everythinginai-unified
+EnvironmentFile=/home/ubuntu/everythinginai-unified/.env
+ExecStart=/usr/bin/node /home/ubuntu/everythinginai-unified/avatar/scheduler/check_in_announcer.js
+StandardOutput=append:/home/ubuntu/everythinginai-unified/logs/checkin.log
+StandardError=append:/home/ubuntu/everythinginai-unified/logs/checkin.log
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target
