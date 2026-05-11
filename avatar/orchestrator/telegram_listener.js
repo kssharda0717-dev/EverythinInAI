@@ -491,26 +491,59 @@ async function handleWeeklyStats(chatId, text) {
 async function handleStats(chatId, text) {
   const db = dbModule.getClient();
 
-  // Parse the command. Accept /stats_<id> tokens... or /stats <id> tokens...
-  const tokens = text.replace(/^\/stats[_ ]/, '').trim().split(/\s+/);
-  if (tokens.length < 2) {
+  // Parse the command. First token after /stats_ is the concept ID prefix.
+  const afterCmd = text.replace(/^\/stats[_ ]/, '').trim();
+  const firstSpace = afterCmd.search(/\s/);
+  if (firstSpace < 0) {
     await reply(chatId,
       '❌ Usage: `/stats_<concept-id> v=<views> w=<watch_sec>`\n' +
-      '\nOptional fields: `l=<likes> c=<comments> s=<shares> sv=<saves> f=<followers_gained>`\n' +
-      '\nExample: `/stats_f6c7c97b v=109 w=3.5 l=4 c=2`'
+      'Or: `/stats_<concept-id> v=<views> totalwatch=<time>`\n' +
+      '\nExamples:\n' +
+      '`/stats_f6c7c97b v=109 w=3.5`\n' +
+      '`/stats_f6c7c97b v=109 totalwatch=6m 49s`'
     );
     return;
   }
+  const idPrefix = afterCmd.slice(0, firstSpace).trim();
+  const rest = afterCmd.slice(firstSpace).trim();
 
-  const idPrefix = tokens.shift();
+  // Parse key=value pairs where values can contain spaces (e.g. "6m 49s").
+  // Strategy: walk through the string, finding each "key=" marker, and capture
+  // everything up to the next "<word>=" marker or end-of-string.
   const params = {};
-  for (const t of tokens) {
-    const [k, v] = t.split('=');
-    if (k && v !== undefined) params[k.trim()] = v.trim();
+  const kvRegex = /(\w+)\s*=\s*([^=]+?)(?=\s+\w+\s*=|$)/g;
+  let m;
+  while ((m = kvRegex.exec(rest)) !== null) {
+    params[m[1].toLowerCase()] = m[2].trim();
   }
 
-  if (!params.v || !params.w) {
-    await reply(chatId, '❌ Missing required fields. Need at least `v=<views>` and `w=<watch_sec>`.');
+  const viewsRaw = params.v || params.views;
+  if (!viewsRaw) {
+    await reply(chatId, '❌ Missing `v=<views>`.');
+    return;
+  }
+  const views = parseInt(viewsRaw, 10) || 0;
+
+  // Watch time: accept either `w=` (avg seconds) OR `totalwatch=` / `tw=` (total time, will auto-divide)
+  let avgWatchSec = NaN;
+  const totalWatchRaw = params.totalwatch || params.tw || params.total_watch;
+  const avgWatchRaw = params.w || params.watch || params.aw;
+
+  if (totalWatchRaw) {
+    const total = parseTimeToSeconds(totalWatchRaw);
+    if (isNaN(total) || views === 0) {
+      await reply(chatId, `❌ Could not parse totalwatch=\`${totalWatchRaw}\` or views is zero.`);
+      return;
+    }
+    avgWatchSec = total / views;
+  } else if (avgWatchRaw) {
+    avgWatchSec = parseTimeToSeconds(avgWatchRaw);
+    if (isNaN(avgWatchSec)) {
+      await reply(chatId, `❌ Could not parse watch=\`${avgWatchRaw}\`. Use a number (3.5) or time format (1:23).`);
+      return;
+    }
+  } else {
+    await reply(chatId, '❌ Missing watch time. Provide either `w=<avg_seconds>` (e.g., `w=3.5`) or `totalwatch=<time>` (e.g., `totalwatch=6m 49s`).');
     return;
   }
 
@@ -533,8 +566,8 @@ async function handleStats(chatId, text) {
   const record = {
     concept_id: concept.id,
     framework: concept.angle || 'unknown',
-    views: parseInt(params.v, 10) || 0,
-    avg_watch_sec: parseFloat(params.w) || 0,
+    views,
+    avg_watch_sec: avgWatchSec,
     reel_duration: concept.estimated_seconds || null,
     likes: parseInt(params.l, 10) || 0,
     comments: parseInt(params.c, 10) || 0,
