@@ -49,11 +49,45 @@ async function getConcept(db, args) {
   return null;
 }
 
+// Pronunciation overrides for Chatterbox TTS (no SSML support).
+// Format: { /word_or_pattern/gi: 'phonetic spelling that TTS reads correctly' }
+// Keys are RegExp; values are the replacement string. Word boundaries (\b) recommended.
+const PRONUNCIATION_OVERRIDES = [
+  // Persona name: Chatterbox reads "RHEA" as "rar-ich-ya"; "Ria" reads as "ree-ah" ✓
+  [/\bRHEA\b/g,        'Ria'],
+  [/\bRhea\b/g,        'Ria'],
+  [/\brhea\b/g,        'Ria'],
+  // Common AI brand pronunciations the TTS gets wrong
+  [/\bGPT\b/g,         'G P T'],
+  [/\bLLM\b/g,         'L L M'],
+  [/\bLLMs\b/g,        'L L Ms'],
+  [/\bRAG\b/g,         'rag'],
+  [/\bLightRAG\b/g,    'Light-rag'],
+  [/\bAGI\b/g,         'A G I'],
+  [/\bAPI\b/g,         'A P I'],
+  [/\bAPIs\b/g,        'A P Is'],
+  [/\bSDK\b/g,         'S D K'],
+  [/\bGUI\b/g,         'gooey'],
+  [/\bCLI\b/g,         'C L I'],
+  [/\bSaaS\b/g,        'sass'],
+  [/\bUI\b/g,          'U I'],
+  [/\bUX\b/g,          'U X'],
+  [/\bHKUDS\b/g,       'H K U D S'],
+  // Brand names
+  [/\bHuggingFace\b/g, 'Hugging Face'],
+  [/\bArXiv\b/g,       'archive'],
+  [/\barxiv\b/g,       'archive'],
+  [/\bGemini\b/g,      'Geminee'],
+];
+
 function preprocessScript(text) {
   // Light cleanup: collapse whitespace, ensure trailing period.
   let out = (text || '').replace(/\s+/g, ' ').trim();
   if (!/[.!?…]$/.test(out)) out += '.';
-  // Replace "yaar" pronunciation cue if needed (Chatterbox handles it natively)
+  // Apply pronunciation overrides
+  for (const [pattern, replacement] of PRONUNCIATION_OVERRIDES) {
+    out = out.replace(pattern, replacement);
+  }
   return out;
 }
 
