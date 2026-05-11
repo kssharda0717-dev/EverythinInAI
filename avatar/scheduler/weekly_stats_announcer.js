@@ -131,16 +131,19 @@ async function main() {
 
   // Build the message
   let msg = '📊 *Weekly Performance Check-in*\n\n';
-  msg += 'Please reply with the views and average watch time for these reels.\n\n';
+  msg += 'Please reply with the views and watch time for these reels.\n\n';
   msg += 'Just copy the template below, fill in the numbers, and send it back as ONE message:\n\n';
   msg += '```\n/weekly_stats\n';
   items.forEach((item, idx) => {
     const friendly = item.title.length > 35 ? item.title.slice(0, 35) + '…' : item.title;
-    msg += `${idx + 1}. ${friendly} | views= watch=\n`;
+    msg += `${idx + 1}. ${friendly} | views= totalwatch=\n`;
   });
   msg += '```\n\n';
-  msg += `_Tip: open Instagram → tap each reel → \"View Insights\" → fill in the two numbers._\n`;
-  msg += `_The LLM will use this data on Monday morning to write better scripts._`;
+  msg += `*Quick guide* — in Instagram Insights, look for:\n`;
+  msg += `• *Views*: total views count (e.g., 109)\n`;
+  msg += `• *totalwatch*: "Total watch time" — paste as you see it (e.g., \`6m 49s\` or \`409\`)\n\n`;
+  msg += `_Or if Instagram shows you "Avg watch time" instead, use \`watch=3.5\` (in seconds)._\n\n`;
+  msg += `_The bot will auto-compute retention % from these two numbers._`;
 
   await sendMessage(msg);
   log.info(`✓ Sent weekly check-in for ${items.length} reels.`);

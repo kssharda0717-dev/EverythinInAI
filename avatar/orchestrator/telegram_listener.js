@@ -284,9 +284,52 @@ async function poll() {
 // ===== Analytics Feedback Loop Handlers =====
 
 /**
+ * Parse a flexible time format into seconds.
+ * Accepts:
+ *   "3.5"      → 3.5
+ *   "3.5s"     → 3.5
+ *   "6m 49s"   → 409
+ *   "6m49s"    → 409
+ *   "1:23"     → 83
+ *   "1h 5m 12s" → 3912
+ */
+function parseTimeToSeconds(input) {
+  if (input === undefined || input === null) return NaN;
+  const s = String(input).trim().toLowerCase();
+  if (!s) return NaN;
+
+  // Pure number (possibly with single trailing 's')
+  const pure = s.match(/^(\d+(?:\.\d+)?)\s*s?$/);
+  if (pure) return parseFloat(pure[1]);
+
+  // hh:mm:ss or mm:ss format
+  const colon = s.match(/^(\d+):(\d+)(?::(\d+))?$/);
+  if (colon) {
+    const a = parseInt(colon[1], 10);
+    const b = parseInt(colon[2], 10);
+    const c = colon[3] ? parseInt(colon[3], 10) : 0;
+    if (colon[3]) return a * 3600 + b * 60 + c;  // h:m:s
+    return a * 60 + b;                            // m:s
+  }
+
+  // Composite format like "6m 49s" or "1h 5m 12s"
+  let total = 0;
+  const hMatch = s.match(/(\d+(?:\.\d+)?)\s*h\b/);
+  const mMatch = s.match(/(\d+(?:\.\d+)?)\s*m\b/);
+  const sMatch = s.match(/(\d+(?:\.\d+)?)\s*s\b/);
+  if (hMatch) total += parseFloat(hMatch[1]) * 3600;
+  if (mMatch) total += parseFloat(mMatch[1]) * 60;
+  if (sMatch) total += parseFloat(sMatch[1]);
+  if (total > 0) return total;
+
+  return NaN;
+}
+
+/**
  * /weekly_stats
- * 1. views=109 watch=3.5
- * 2. views=300 watch=6.2
+ * 1. views=109 watch=3.5         (3.5s avg per viewer)
+ * 2. views=300 totalwatch=6m 49s  (total watch time, will auto-compute avg)
+ * 3. views=500 watch=1:23         (1m23s avg — unusual but supported)
  * ...
  *
  * Matches each numbered line to the corresponding reel in the latest
@@ -332,16 +375,39 @@ async function handleWeeklyStats(chatId, text) {
       continue;
     }
 
-    // Extract views and watch via regex
-    const viewsMatch = line.match(/views?\s*=\s*(\d+(?:\.\d+)?)/i);
-    const watchMatch = line.match(/watch(?:_sec)?\s*=\s*(\d+(?:\.\d+)?)/i);
-    if (!viewsMatch || !watchMatch) {
-      errors.push(`Line ${idx + 1}: missing views or watch number`);
+    // Extract views
+    const viewsMatch = line.match(/views?\s*=\s*(\d+)/i);
+    if (!viewsMatch) {
+      errors.push(`Line ${idx + 1}: missing \`views=\``);
+      continue;
+    }
+    const views = parseInt(viewsMatch[1], 10);
+
+    // Extract watch time — supports flexible formats. Capture everything up to the
+    // next " key=" or end-of-line.
+    const watchMatch = line.match(/\b(totalwatch|total_watch|tw|watch_total)\s*=\s*([^=]+?)(?=\s+\w+\s*=|$)/i);
+    const avgWatchMatch = line.match(/\b(watch|avgwatch|avg_watch|aw|w)\s*=\s*([^=]+?)(?=\s+\w+\s*=|$)/i);
+
+    let watchSec;
+    if (watchMatch) {
+      // User gave total watch time. Auto-compute average.
+      const totalSec = parseTimeToSeconds(watchMatch[2]);
+      if (isNaN(totalSec) || views === 0) {
+        errors.push(`Line ${idx + 1}: could not parse totalwatch=\`${watchMatch[2]}\``);
+        continue;
+      }
+      watchSec = totalSec / views;
+    } else if (avgWatchMatch) {
+      watchSec = parseTimeToSeconds(avgWatchMatch[2]);
+      if (isNaN(watchSec)) {
+        errors.push(`Line ${idx + 1}: could not parse watch=\`${avgWatchMatch[2]}\``);
+        continue;
+      }
+    } else {
+      errors.push(`Line ${idx + 1}: missing \`watch=<sec>\` or \`totalwatch=<time>\``);
       continue;
     }
 
-    const views = parseInt(viewsMatch[1], 10);
-    const watchSec = parseFloat(watchMatch[1]);
     if (isNaN(views) || isNaN(watchSec)) {
       errors.push(`Line ${idx + 1}: invalid numbers`);
       continue;
