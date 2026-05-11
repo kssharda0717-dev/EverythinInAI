@@ -148,15 +148,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return `Dialogue: 0,${start},${end},${style},,0,0,0,,${text}`;
   });
 
-  // Persistent watermark in top-right corner across the entire Reel
-  const watermark = `Dialogue: 0,${assTime2(0)},${assTime2(totalSeconds)},Watermark,,0,0,0,,@avi.in.ai`;
-
-  // Outro brand line: appears in the last 2.5 seconds with a fade in/out
-  const outroStart = Math.max(0, totalSeconds - 2.5);
-  const outroEnd = totalSeconds;
-  const outro = `Dialogue: 0,${assTime2(outroStart)},${assTime2(outroEnd)},Outro,,0,0,0,,{\\fad(300,200)\\an2}EVERYTHININAI.COM`;
-
-  return header + [...wordEvents, watermark, outro].join('\n');
+  return header + wordEvents.join('\n');
 }
 
 function assTime2(seconds) {

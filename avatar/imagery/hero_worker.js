@@ -162,15 +162,15 @@ async function main() {
     process.exit(1);
   }
 
-  const outfit = pickOutfit(args.outfit, concept.id);
-  log.info(`Outfit locked for this Reel: ${outfit.key}`);
+  const combo = pickCombo(args.outfit, concept.id);
+  log.info(`Combo locked for this Reel: outfit=${combo.outfit.key}, setting=${combo.setting.key}, pose=${combo.pose.key}`);
 
   await db.from('reel_concepts').update({
     state: 'image_generating',
     updated_at: new Date().toISOString(),
   }).eq('id', concept.id);
 
-  const r = await renderHero({ persona, outfit, conceptId: concept.id, dryRun: args.dryRun });
+  const r = await renderHero({ persona, combo, conceptId: concept.id, dryRun: args.dryRun });
   if (r.skipped) return;
 
   // Wipe any existing keyframes for this concept (e.g. from prior multi-keyframe runs)
@@ -202,7 +202,7 @@ async function main() {
   log.info(`══════════════════════════════════════════════`);
   log.info(`✓ Hero keyframe rendered.`);
   log.info(`   url       : ${r.image_url}`);
-  log.info(`   outfit    : ${r.outfit_key}`);
+  log.info(`   outfit    : ${combo.outfit.key}`);
   log.info(`   cost      : ~$${r.cost_usd}`);
   log.info(`   gen time  : ${(r.generation_ms / 1000).toFixed(1)}s`);
   log.info(`══════════════════════════════════════════════`);

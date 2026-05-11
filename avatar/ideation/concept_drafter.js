@@ -70,10 +70,11 @@ REQUIREMENTS:
 
 2. For each concept, return:
    - title: a working title (max 60 chars) — internal use
-   - hook: 1-2 short punchy sentences (max 15 words). MUST stop the scroll using pattern-interrupt. Start mid-thought. No "Hey guys", no "Did you know". Example: "They just killed the most important feature." or "I've been using this wrong for 6 months."
+   - hook: 1-2 short punchy sentences (max 15 words). MUST stop the scroll using pattern-interrupt. Start mid-thought. BANNED PHRASES: "Hey guys", "Did you know", "Just saw", "Today I'm", "Look at this". Example: "They just killed the most important feature." or "I've been using this wrong for 6 months."
    - body_script: 3-4 short sentences delivering the substance. Conversational, Rhea's voice. ~15-20 seconds at natural pace (~45-60 words).
-   - punchline: The "Open Loop" ending. Do NOT summarize or wrap up neatly. End on a cliffhanger, a controversial take, or an unfinished thought that forces them to rewatch or comment to get the answer. Then append the DM-funnel CTA. ~5-8 seconds.
-   - full_script: the concatenation of hook + body_script + punchline (used for TTS).
+   - punchline: The "Open Loop" ending. Do NOT summarize or wrap up neatly. MUST NOT restate or repeat what was said in the body_script. End on a cliffhanger, a controversial take, or an unfinished thought that forces them to rewatch or comment to get the answer. ~5-8 seconds.
+   - cta: a short call-to-action like "Comment LINK and I'll DM you the repo".
+   - full_script: the concatenation of hook + body_script + punchline + cta (used for TTS). YOU MUST INCLUDE THE CTA IN THE FULL_SCRIPT SO SHE SAYS IT OUT LOUD.
    - estimated_seconds: integer, target 28-35.
    - keyframes: array of 4 objects, each = {idx, prompt, scene_caption, duration_ms}. The "prompt" is a SCENE description (not Avi's appearance — that's locked elsewhere). The "scene_caption" is the on-screen subtitle text shown during this keyframe (max 8 words). Sum of duration_ms must roughly equal estimated_seconds * 1000.
    - caption: Instagram caption, 3-5 lines, hook-style opening, soft CTA at end. Max 220 chars. Use 0-2 emojis only if purposeful (✨ 🌿 💭 ⚡ never 😍 🥰).
