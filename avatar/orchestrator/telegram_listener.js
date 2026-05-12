@@ -339,12 +339,16 @@ async function handlePosted(chatId, text) {
 
 async function handleAuditRejects(chatId) {
   const db = dbModule.getClient();
-  const { data } = await db.from('discovery_queue')
-    .select('id, source_url, title, error_message, created_at')
+  const { data, error } = await db.from('discovery_queue')
+    .select('id, url, raw_title, raw_description, source, error_message, heuristic_score, processed_at')
     .eq('status', 'rejected')
-    .order('created_at', { ascending: false })
+    .order('processed_at', { ascending: false, nullsFirst: false })
     .limit(8);
 
+  if (error) {
+    await reply(chatId, `❌ Query error: ${error.message}`);
+    return;
+  }
   if (!data || data.length === 0) {
     await reply(chatId, 'No rejected items in the queue. Nothing to audit.');
     return;
@@ -352,11 +356,15 @@ async function handleAuditRejects(chatId) {
 
   let msg = '🔍 *Recently Rejected Items* (review for false negatives)\n\n';
   for (const item of data) {
-    msg += `• ${item.title || '(no title)'}\n`;
-    msg += `   ${item.source_url}\n`;
-    msg += `   _Reason: ${item.error_message || 'unknown'}_\n\n`;
+    const title = item.raw_title || '(no title)';
+    const desc = (item.raw_description || '').slice(0, 80);
+    const reason = item.error_message || 'unknown';
+    msg += `• *${title}* _(${item.source || '?'}, score=${item.heuristic_score || 0})_\n`;
+    if (desc) msg += `   _${desc}${desc.length >= 80 ? '…' : ''}_\n`;
+    msg += `   🔗 ${item.url}\n`;
+    msg += `   ✖️ ${reason}\n\n`;
   }
-  msg += `_To recover an item, manually mark it as_ \`pending\` _in Supabase._`;
+  msg += `_Spot a real tool that got wrongly rejected? Reply with its URL and I'll re-queue it._`;
   await reply(chatId, msg);
 }
 
