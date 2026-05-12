@@ -208,10 +208,10 @@ async function renderHeroImage({ persona, mood, trigger, runId }) {
     lora_scale: 1.0,
     aspect_ratio: '9:16',  // 9:16 vertical for Reels
     num_outputs: 1,
-    num_inference_steps: 28,
-    guidance: 3.0,
+    num_inference_steps: 50,
+    guidance: 3.5,
     output_format: 'webp',
-    output_quality: 95,
+    output_quality: 100,
     go_fast: false,
     seed,
   }, { timeoutMs: 240_000 });
@@ -292,10 +292,10 @@ async function main() {
       lora_scale: 1.0,
       aspect_ratio: '9:16',
       num_outputs: 1,
-      num_inference_steps: 28,
-      guidance: 3.0,
+      num_inference_steps: 50,
+      guidance: 3.5,
       output_format: 'webp',
-      output_quality: 95,
+      output_quality: 100,
       go_fast: false,
       seed: heroSeed,
     }, { timeoutMs: 240_000 });

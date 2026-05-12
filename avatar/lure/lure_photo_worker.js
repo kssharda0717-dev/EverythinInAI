@@ -167,13 +167,17 @@ function pickSceneForToday() {
   return keys[week % keys.length];
 }
 
+// The base prefix enforces the photographic style and the strict "NOT cgi" guardrails
+// Tuned for Samiikssha-tier realism: specific lens, film stock, lighting anchors.
+const STYLE_ANCHOR = `Photographic style: shot on iPhone 15 Pro Max main camera, 24mm lens, photorealistic ultra-detailed natural skin texture, visible pores, natural subtle makeup, cinematic depth of field, casual Instagram influencer aesthetic, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, soft ambient lighting, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, no plastic skin.`;
+
 function buildPrompt(sceneKey, persona, trigger) {
   const scene = SCENES[sceneKey];
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
-    `Photographic style: shot on iPhone 15 Pro, casual Instagram influencer aesthetic, photorealistic ultra-detailed natural skin texture, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render.`,
+    STYLE_ANCHOR,
   ].join(' ');
 }
 
@@ -189,7 +193,7 @@ function buildPromptFromConcept(concept, trigger) {
   }
   // Reinforce style if the LLM forgot
   if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
-    prompt += ' Shot on iPhone 15 Pro, casual Instagram influencer aesthetic, photorealistic ultra-detailed natural skin texture, candid documentary feel.';
+    prompt += ` ${STYLE_ANCHOR}`;
   }
   return prompt;
 }
@@ -205,10 +209,10 @@ async function renderLurePhoto({ persona, sceneKey, calendarId }) {
     lora_scale: 1.0,
     aspect_ratio: '4:5',
     num_outputs: 1,
-    num_inference_steps: 28,
-    guidance: 3.0,
+    num_inference_steps: 50,
+    guidance: 3.5,
     output_format: 'webp',
-    output_quality: 95,
+    output_quality: 100,
     go_fast: false,
     seed,
   }, { timeoutMs: 240_000 });
@@ -260,10 +264,10 @@ async function main() {
       lora_scale: 1.0,
       aspect_ratio: '4:5',
       num_outputs: 1,
-      num_inference_steps: 28,
-      guidance: 3.0,
+      num_inference_steps: 50,
+      guidance: 3.5,
       output_format: 'webp',
-      output_quality: 95,
+      output_quality: 100,
       go_fast: false,
       seed,
     }, { timeoutMs: 240_000 });

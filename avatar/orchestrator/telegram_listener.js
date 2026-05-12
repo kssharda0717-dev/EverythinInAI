@@ -277,6 +277,13 @@ async function poll() {
       const text = msg.text.trim();
       log.info(`[${chatId}] ${text}`);
 
+      // Detect Instagram URL (any text containing instagram.com URL)
+      const igMatch = text.match(/https?:\/\/(?:www\.)?instagram\.com\/[^\s]+/i);
+      if (igMatch) {
+        await handleInstagramUrlAudio(chatId, igMatch[0]);
+        continue;
+      }
+
       if (text === '/help' || text === '/start') {
         await handleHelp(chatId);
       } else if (text === '/status') {
@@ -1164,6 +1171,118 @@ async function handleForwardedAudio(chatId, msg) {
     await reply(chatId,
       `✅ *Both audios locked in.*\n\n` +
       `Most recent: ${pending.for_date} → \`${fileName}\`\n\n` +
+      `Renders fire automatically Sat 8 AM and Sun 8 AM IST.`
+    );
+  }
+}
+
+// =============================================================================
+// handleInstagramUrlAudio — user pasted an Instagram Reel/audio URL.
+// Use yt-dlp to download, extract audio with ffmpeg, then resolve next pending.
+// =============================================================================
+async function handleInstagramUrlAudio(chatId, url) {
+  const db = dbModule.getClient();
+
+  // Find the next awaiting upload for this chat
+  const { data: pending } = await db.from('pending_audio_uploads')
+    .select('*')
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pending) {
+    await reply(chatId,
+      `ℹ️ I see an Instagram URL, but I'm not waiting for an audio right now.\n\n` +
+      `Type /dance first if you want to use this for the next weekend's dance reels.`
+    );
+    return;
+  }
+
+  await reply(chatId, `⬇️ Downloading audio from Instagram… (this can take ~30s if Meta is slow)`);
+
+  const fs = require('fs');
+  const path = require('path');
+  const { spawnSync } = require('child_process');
+  const tmpStem = path.join('/tmp', `ig-${Date.now()}`);
+  const tmpVid = `${tmpStem}.mp4`;
+  const tmpMp3 = `${tmpStem}.mp3`;
+
+  // Step 1: download with yt-dlp (must be installed on the VM)
+  const dl = spawnSync('yt-dlp', ['-f', 'best', '-o', tmpVid, url], { encoding: 'utf8', timeout: 90_000 });
+  if (dl.status !== 0 || !fs.existsSync(tmpVid)) {
+    await reply(chatId,
+      `❌ yt-dlp could not download from this URL. Instagram sometimes blocks scraping.\n\n` +
+      `_Fallback:_ open the Reel in Instagram → Share icon → Telegram → forward to me.`
+    );
+    log.warn(`yt-dlp failed: ${dl.stderr?.slice(0, 300) || 'no stderr'}`);
+    return;
+  }
+
+  // Step 2: extract audio with ffmpeg
+  const ff = spawnSync('ffmpeg', ['-y', '-i', tmpVid, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', tmpMp3], { stdio: 'pipe' });
+  if (ff.status !== 0 || !fs.existsSync(tmpMp3)) {
+    await reply(chatId, `❌ ffmpeg audio extraction failed.`);
+    try { fs.unlinkSync(tmpVid); } catch {}
+    return;
+  }
+
+  // Step 3: upload to Supabase Storage
+  const buf = fs.readFileSync(tmpMp3);
+  const fileName = `instagram-${Date.now()}.mp3`;
+  const storagePath = `dance-audio/${pending.for_date}/${fileName}`;
+  const { error: upErr } = await db.storage.from('avi-images')
+    .upload(storagePath, buf, { contentType: 'audio/mpeg', upsert: true, cacheControl: '31536000' });
+
+  // Cleanup
+  try { fs.unlinkSync(tmpVid); } catch {}
+  try { fs.unlinkSync(tmpMp3); } catch {}
+
+  if (upErr) {
+    await reply(chatId, `❌ Supabase upload failed: ${upErr.message}`);
+    return;
+  }
+
+  const { data: pub } = db.storage.from('avi-images').getPublicUrl(storagePath);
+
+  // Step 4: link to calendar row + mark pending row resolved
+  await db.from('content_calendar')
+    .update({
+      dance_audio_url: pub.publicUrl,
+      dance_audio_filename: fileName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('target_date', pending.for_date)
+    .eq('content_type', 'lifestyle_reel');
+
+  await db.from('pending_audio_uploads')
+    .update({
+      status: 'received',
+      audio_url: pub.publicUrl,
+      audio_filename: fileName,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', pending.id);
+
+  // Are there more pending uploads?
+  const { data: nextPending } = await db.from('pending_audio_uploads')
+    .select('for_date')
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (nextPending) {
+    const isSun = new Date(nextPending.for_date).getDay() === 0;
+    await reply(chatId,
+      `✅ Saved IG audio for *${pending.for_date}*\n\n` +
+      `*Step 2 of 2:* Forward (or paste an IG URL for) the audio for *${isSun ? 'Sunday' : 'next day'}'s* (${nextPending.for_date}) dance reel.`
+    );
+  } else {
+    await reply(chatId,
+      `✅ *Both audios locked in.*\n\n` +
       `Renders fire automatically Sat 8 AM and Sun 8 AM IST.`
     );
   }

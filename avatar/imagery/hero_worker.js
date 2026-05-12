@@ -136,10 +136,10 @@ async function renderHero({ persona, combo, conceptId, dryRun }) {
     lora_scale: 1.0,
     aspect_ratio: '4:5',           // 4:5 = 1080x1350, IG-Reel safe
     num_outputs: 1,
-    num_inference_steps: 28,
-    guidance: 3.0,
+    num_inference_steps: 50,
+    guidance: 3.5,
     output_format: 'webp',
-    output_quality: 95,             // higher quality for the single hero shot
+    output_quality: 100,             // higher quality for the single hero shot
     go_fast: false,
     seed,
   }, { timeoutMs: 300_000 });

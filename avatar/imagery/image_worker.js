@@ -101,10 +101,10 @@ async function renderKeyframe({ persona, kf, idx, conceptId, dryRun }) {
     lora_scale: 1.0,                     // 1.0 = full LoRA strength
     aspect_ratio: '4:5',                  // IG Reel portrait
     num_outputs: 1,
-    num_inference_steps: 28,
-    guidance: 3.0,                        // Flux Dev natural setting
+    num_inference_steps: 50,
+    guidance: 3.5,                        // Flux Dev natural setting
     output_format: 'webp',
-    output_quality: 92,
+    output_quality: 100,
     go_fast: false,                       // false = full quality
     seed,
   }, { timeoutMs: 300_000 });
