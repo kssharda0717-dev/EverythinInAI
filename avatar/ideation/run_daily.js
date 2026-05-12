@@ -175,6 +175,38 @@ async function main() {
     }
     log.info(`✓ Inserted ${conceptIds.length} concepts into reel_concepts`);
 
+    // Persist topic in topic_history so we never resuggest the same paper/tool
+    // even if reel_concepts rows are later deleted (debugging, wipes, etc.)
+    try {
+      const { canonicalTopicKey } = require('./signal_picker');
+      const topicKey = canonicalTopicKey(chosen.signal);
+      const { data: existing } = await db.from('topic_history')
+        .select('id, signal_ids, usage_count')
+        .eq('persona_id', persona.id)
+        .eq('topic_key', topicKey)
+        .maybeSingle();
+      if (existing) {
+        const sigIds = Array.from(new Set([...(existing.signal_ids || []), chosen.signal.id]));
+        await db.from('topic_history').update({
+          signal_ids: sigIds,
+          last_used_at: new Date().toISOString(),
+          usage_count: (existing.usage_count || 0) + 1,
+        }).eq('id', existing.id);
+        log.info(`✓ topic_history updated for "${chosen.signal.title.slice(0, 60)}" (count=${(existing.usage_count || 0) + 1})`);
+      } else {
+        await db.from('topic_history').insert({
+          persona_id: persona.id,
+          topic_key: topicKey,
+          display_title: chosen.signal.title,
+          signal_ids: [chosen.signal.id],
+          entities: chosen.signal.entities || [],
+        });
+        log.info(`✓ topic_history created for "${chosen.signal.title.slice(0, 60)}"`);
+      }
+    } catch (err) {
+      log.warn(`topic_history write failed (non-fatal): ${err.message}`);
+    }
+
     // NOTE: Auto-pick is deliberately removed. The user MUST reply /pick_<id>
     // in Telegram. If they don't, today's tech reel simply doesn't get rendered.
     // This is intentional cost-control (no surprise renders).

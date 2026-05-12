@@ -120,6 +120,49 @@ async function getUsedSignalIds(personaId, days = 30) {
 }
 
 /**
+ * Build a canonical topic key from a signal so we can dedupe across multiple
+ * ai_signals rows that point to the same underlying paper/tool.
+ *
+ * Strategy: lowercase the title, strip punctuation, strip common filler words,
+ * collapse whitespace. Two signals about "LightRAG: Simple and Fast Retrieval-
+ * Augmented Generation" should produce the same key whether they come from
+ * GitHub, ArXiv, or HN.
+ */
+function canonicalTopicKey(sig) {
+  const t = (sig.title || '').toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')      // strip punctuation
+    .replace(/\b(the|a|an|of|for|with|and|or|to|on|in|by)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  // Use just the first 50 chars to be lenient on slight variations
+  return t.slice(0, 50);
+}
+
+/**
+ * Pull persistent topic history. Returns a Set of canonical topic keys that
+ * have been used in any reel in the last N days.
+ */
+async function getUsedTopicKeys(personaId, days = 30) {
+  const db = dbModule.getClient();
+  const since = new Date(Date.now() - days * 86400_000).toISOString();
+  try {
+    const { data, error } = await db
+      .from('topic_history')
+      .select('topic_key')
+      .eq('persona_id', personaId)
+      .gte('last_used_at', since);
+    if (error) {
+      log.warn(`topic_history query failed (table missing?): ${error.message}`);
+      return new Set();
+    }
+    return new Set((data || []).map(r => r.topic_key));
+  } catch (err) {
+    log.warn(`topic_history not available, skipping topic-based dedup: ${err.message}`);
+    return new Set();
+  }
+}
+
+/**
  * Pick the top N candidate signals for today's ideation.
  * @returns {Promise<Array>} array of {signal, score, reasoning}
  */
@@ -164,9 +207,27 @@ async function pickTopSignals(personaId, options = {}) {
 
   const recentEntityCounts = await getRecentEntityCounts(personaId);
   const usedIds = await getUsedSignalIds(personaId);
+  const usedTopicKeys = await getUsedTopicKeys(personaId);
+
+  // Also dedupe by canonical topic within today's candidate batch (so we don't
+  // suggest two duplicate-but-different-id signals about the same paper).
+  const seenTopicKeys = new Set();
 
   const scored = signals
-    .filter(s => !usedIds.has(s.id))
+    .filter(s => {
+      if (usedIds.has(s.id)) return false;
+      const key = canonicalTopicKey(s);
+      if (usedTopicKeys.has(key)) {
+        log.info(`  ✖ skip [topic-history] "${s.title.slice(0, 60)}" — topic already used`);
+        return false;
+      }
+      if (seenTopicKeys.has(key)) {
+        log.info(`  ✖ skip [duplicate-batch] "${s.title.slice(0, 60)}" — dupe of earlier candidate this run`);
+        return false;
+      }
+      seenTopicKeys.add(key);
+      return true;
+    })
     .map(s => ({
       signal: s,
       score: scoreSignal(s, recentEntityCounts),
@@ -183,4 +244,4 @@ async function pickTopSignals(personaId, options = {}) {
   return top;
 }
 
-module.exports = { pickTopSignals, scoreSignal };
+module.exports = { pickTopSignals, scoreSignal, canonicalTopicKey };
