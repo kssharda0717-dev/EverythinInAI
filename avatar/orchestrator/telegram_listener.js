@@ -306,8 +306,11 @@ async function handlePosted(chatId, text) {
   // Default: latest 'done' calendar row that has no posted_at yet
   let calRow;
   if (arg) {
-    const { data } = await db.from('content_calendar').select('*').ilike('id', `${arg}%`).maybeSingle();
-    calRow = data;
+    // Can't use .ilike on uuid columns (Postgres rejects: 'operator does not exist: uuid ~~* unknown').
+    // Workaround: fetch the recent N rows and filter by id prefix in JS.
+    const { data } = await db.from('content_calendar').select('*')
+      .order('created_at', { ascending: false }).limit(50);
+    calRow = (data || []).find(r => r.id.startsWith(arg.toLowerCase())) || null;
   } else {
     const { data } = await db.from('content_calendar').select('*')
       .eq('state', 'done')
@@ -830,11 +833,14 @@ async function handleStats(chatId, text) {
     return;
   }
 
-  // Find the concept by id prefix
-  const { data: concepts } = await db.from('reel_concepts')
+  // Find the concept by id prefix. Can't use .ilike on uuid columns
+  // (Postgres rejects with 'operator does not exist: uuid ~~* unknown').
+  // Workaround: fetch recent rows and filter by prefix in JS.
+  const { data: allConcepts } = await db.from('reel_concepts')
     .select('id, title, angle, estimated_seconds, video_url')
-    .ilike('id', `${idPrefix}%`)
-    .limit(2);
+    .order('created_at', { ascending: false })
+    .limit(200);
+  const concepts = (allConcepts || []).filter(c => c.id.startsWith(idPrefix.toLowerCase())).slice(0, 2);
   if (!concepts || concepts.length === 0) {
     await reply(chatId, `❌ No reel concept found with id starting with \`${idPrefix}\`.`);
     return;
