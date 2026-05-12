@@ -37,36 +37,115 @@ const W = 1080;
 const H = 1350;
 
 // 6 lure scene templates. Focus: highly engaging, natural slice-of-life moments.
+// 20 curated lure scenes across 4 brand buckets (Editorial Bold, Aspirational Casual, Traditional Elegance, Luxury Lifestyle)
+// Every scene has a CONTEXT (place + activity + prop) so it reads as 'lifestyle moment', not 'body shot'.
 const SCENES = {
-  mirror_selfie: {
-    label: 'Getting ready mirror selfie',
-    scene: 'taking a casual mirror selfie with her phone covering part of her face, standing in a chic modern bathroom or walk-in closet, looking effortlessly stunning, soft warm vanity lighting, highly natural candid feel',
-    outfit: 'elegant fitted black evening dress, classy yet alluring, hair perfectly styled with loose waves falling over one shoulder',
+  // === EDITORIAL BOLD (5) ===
+  beach_editorial: {
+    label: 'Editorial beach in Goa',
+    scene: 'standing on pristine white-sand beach holding a fresh coconut, confident magnetic gaze at camera, golden hour sunlight, Vogue India editorial framing, ocean and palm trees blurred behind',
+    outfit: 'minimalist black bikini with delicate gold body chain, beachy waves in hair, sunkissed skin, no excessive makeup',
   },
-  cafe_candid: {
-    label: 'Candid cafe moment',
-    scene: 'sitting at a trendy aesthetic cafe, looking up from her iced coffee with a genuine radiant smile, candid mid-laugh expression, natural sunlight hitting her face, blurry background of cafe patrons and greenery',
-    outfit: 'stylish oversized white linen shirt slightly unbuttoned over a simple fitted camisole, effortless weekend chic, delicate gold jewelry',
+  hotel_balcony_slip: {
+    label: 'Luxury hotel suite balcony',
+    scene: 'standing on a luxury hotel suite balcony at golden hour, holding a coffee cup from the in-room espresso machine, looking out at city skyline, smirking slightly, hair tousled, classy slice-of-life moment',
+    outfit: 'deep emerald silk slip dress, delicate diamond necklace, hair in loose waves',
   },
-  golden_hour_car: {
-    label: 'Driving at golden hour',
-    scene: 'sitting in the driver seat of a luxury car with the window down, golden hour sunlight streaming in and illuminating her hair, looking out the window with a serene confident expression, wind slightly blowing her hair',
-    outfit: 'casual but expensive-looking beige knit top, designer sunglasses resting on her head',
+  infinity_pool_book: {
+    label: 'Infinity pool with book',
+    scene: 'lounging at the edge of an infinity pool overlooking a tropical jungle, reading a hardcover book on AI strategy, holding a glass of fresh coconut water, oversized Celine sunglasses on head, perfect blend of intellect and aesthetic',
+    outfit: 'white one-piece swimsuit with elegant cutouts, classy resort aesthetic, no jewelry',
   },
-  dancing_candid: {
-    label: 'Random dancing candid',
-    scene: 'captured mid-twirl or dancing playfully in a beautiful minimalist apartment living room, motion blur on the edges, big genuine laugh, looking away from the camera, warm evening ambient lighting',
-    outfit: 'flowing silk slip dress, elegant and fluid, bare feet, hair moving dynamically with the motion',
+  rooftop_bar_red: {
+    label: 'Rooftop bar Mumbai night',
+    scene: 'late night at exclusive rooftop bar in Mumbai, holding a martini glass, paparazzi flash photography style candid, city lights blurred behind, magnetic talk-of-the-town energy',
+    outfit: 'bold tailored red blazer with nothing underneath, sleek black trousers, delicate diamond drop earrings',
   },
-  vacation_stroll: {
-    label: 'Vacation evening stroll',
-    scene: 'walking down a cobblestone street in a European-style town at dusk, looking back over her shoulder at the camera with an inviting smile, fairy lights and blurred restaurant patios in the background',
-    outfit: 'chic summer evening outfit, off-the-shoulder top with a flowing skirt, effortless high-end vacation aesthetic',
+  pilates_post: {
+    label: 'Post-pilates studio mirror',
+    scene: 'post-workout mirror selfie inside a high-end pilates studio, glowing natural skin with light sweat, messy high bun, holding a sleek steel water bottle, aspirational fitness-lifestyle aesthetic',
+    outfit: 'matching sage green Alo Yoga sports bra and leggings set',
   },
-  morning_routine: {
-    label: 'Morning routine natural',
-    scene: 'standing in a bright modern kitchen, holding a matcha latte, looking directly at the camera with a fresh-faced, "I woke up like this" natural smile, bright morning light filling the room',
-    outfit: 'cozy high-end matching lounge set, hair tied up in a messy bun with face-framing pieces, minimal makeup look',
+
+  // === ASPIRATIONAL CASUAL (5) ===
+  bandra_sunday_coffee: {
+    label: 'Sunday Bandra apartment coffee',
+    scene: 'Sunday morning in her minimalist Bandra apartment, sitting on a plush cream sofa with legs tucked in, holding a ceramic mug of black coffee, looking out the window, slice-of-life cozy moment',
+    outfit: 'oversized grey sweatpants and tight white ribbed tank top, barefoot, no makeup, hair in a messy bun',
+  },
+  cafe_macbook_laugh: {
+    label: 'Indie coffee roastery candid',
+    scene: 'caught mid-laugh at chic indie coffee roastery, looking off-camera at someone, an open MacBook with code on the screen and a half-eaten croissant on the table, smart-approachable beauty, natural daylight from window',
+    outfit: 'vintage Levi 501 jeans, crisp white t-shirt, delicate gold layered necklaces, hair in a messy braid',
+  },
+  european_street_trench: {
+    label: 'European street walk',
+    scene: 'walking down a sun-dappled street in Lisbon or Paris, looking back over her shoulder at camera with a bright genuine smile, cobblestones and old-world facades behind, travel-influencer aesthetic',
+    outfit: 'beige trench coat over a black mini dress, knee-high leather boots, oversized sunglasses pushed back on head',
+  },
+  vanity_getting_ready: {
+    label: 'Getting ready at vanity',
+    scene: 'sitting at a sleek modern vanity applying a subtle nude lipstick, looking into the mirror, plush white hotel robe slipped slightly off one shoulder, perfect glowing skin, soft diffused warm lighting',
+    outfit: 'plush white luxury hotel robe',
+  },
+  vinyl_records_floor: {
+    label: 'Vinyl records on the floor',
+    scene: 'sitting cross-legged on a patterned Persian rug surrounded by vintage vinyl records, adjusting the needle on a turntable, warm afternoon light through window, boho-chic cultured vibe',
+    outfit: 'oversized vintage band t-shirt tucked into denim shorts, no shoes, hair in a low loose bun',
+  },
+
+  // === TRADITIONAL ELEGANCE (5) ===
+  diwali_party_saree: {
+    label: 'Diwali party midnight saree',
+    scene: 'attending a high-end Diwali celebration, looking directly at camera with elegant powerful gaze, soft glowing diyas blurred in background, Bollywood-actress-tier glamour, festive warm lighting',
+    outfit: 'breathtaking contemporary midnight-blue sequined saree, hair in sleek waves, heavy oxidized silver jhumka earrings, delicate bindi',
+  },
+  red_kanjeevaram: {
+    label: 'Festival red Kanjeevaram',
+    scene: 'close-up portrait during a traditional Indian festival, looking down slightly with a soft demure smile, deeply rooted cultural beauty, warm golden festival lighting',
+    outfit: 'heavy red Kanjeevaram silk saree, gold choker necklace, intricate gold jhumkas, small elegant bindi',
+  },
+  udaipur_lehenga_twirl: {
+    label: 'Udaipur palace lehenga twirl',
+    scene: 'twirling joyfully in a heritage palace courtyard in Udaipur, sunlight catching the embroidery, vibrant celebratory motion blur, modern-Indian aesthetic',
+    outfit: 'pastel floral lehenga with intricate embroidery, traditional jewelry, hair half-up half-down with floral hair clip',
+  },
+  vintage_ambassador_saree: {
+    label: 'Vintage Ambassador car saree',
+    scene: 'sitting in a vintage white Ambassador car at sunset, oversized vintage sunglasses, looking out the open window with a soft confident smile, old-money Indian royalty aesthetic, deeply elegant and timeless',
+    outfit: 'crisp white linen saree with sleeveless blouse, vintage gold drop earrings, no excess accessories',
+  },
+  festive_kurta_mirror: {
+    label: 'Festive kurta mirror selfie',
+    scene: 'mirror selfie before heading out for a festival, adjusting a heavy gold earring, modern influencer format applied to traditional attire, warm golden hour light streaming through window',
+    outfit: 'heavy velvet kurta with intricate zari work in deep burgundy, traditional gold jewelry, hair in a low bun with maang tikka',
+  },
+
+  // === LUXURY LIFESTYLE (5) ===
+  porsche_golden_hour: {
+    label: 'Luxury SUV golden hour',
+    scene: 'sitting in the driver seat of a Porsche or Range Rover with beige leather interior, golden hour light hitting her face, looking forward with effortless wealth aura, hand resting on the leather steering wheel',
+    outfit: 'crisp white linen shirt unbuttoned at the collar, delicate gold layered necklaces, designer aviator sunglasses on the head',
+  },
+  business_class_champagne: {
+    label: 'Business class flight',
+    scene: 'relaxing in a lie-flat Business Class airplane seat on an international flight, holding a glass of champagne, looking out the window at clouds, jet-setter aspiration, soft cabin lighting',
+    outfit: 'matching camel-colored cashmere lounge set, comfortable but extremely expensive looking',
+  },
+  omakase_solo: {
+    label: 'Solo omakase fine dining',
+    scene: 'solo fine-dining at an omakase restaurant counter, beautifully plated sushi and a glass of red wine on the wooden bar in front, looking at camera with a sophisticated knowing smile, warm restaurant lighting',
+    outfit: 'sleek black halter-neck dress, minimalist gold cuff bracelet, hair in a sleek low ponytail',
+  },
+  art_gallery_blazer: {
+    label: 'Contemporary art gallery',
+    scene: 'exploring a contemporary art gallery, hands in pockets, looking thoughtfully at a large abstract painting, intellectual-wealthy-cultured aura, soft museum lighting',
+    outfit: 'tailored oversized beige suit with a white silk camisole underneath, sleek black loafers, hair in loose waves',
+  },
+  yacht_white_linen: {
+    label: 'Private yacht golden hour',
+    scene: 'golden hour on a private yacht, holding a woven sun hat in one hand, dress and hair flowing in the wind, the ultimate expression of freedom and success, ocean horizon behind',
+    outfit: 'flowing white linen maxi dress with a low V-back, barefoot, gold ankle bracelet',
   },
 };
 

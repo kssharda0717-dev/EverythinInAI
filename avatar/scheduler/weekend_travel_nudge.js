@@ -85,17 +85,18 @@ async function main() {
     return;
   }
 
-  // No travel planned — ask
+  // No mode picked — ask the 3-option menu
   const msg =
-    `🗺 *Where is Rhea this weekend?*\n\n` +
-    `${saturday} → ${sunday}\n\n` +
-    `Reply with one of:\n` +
-    `\`/travel <city>\`  — e.g., \`/travel Goa beach "surfing, beach yoga"\`\n` +
-    `\`/travel home\`  — content set in Bandra/Mumbai (default)\n\n` +
-    `_If you don't reply, defaults to \`home\`._`;
+    `🌟 *Weekend Mode for Rhea*\n\n` +
+    `Sat ${saturday} + Sun ${sunday}\n\n` +
+    `Pick ONE mode (applies to both days):\n\n` +
+    `🏠 \`/home\` — both reels in Bandra/Mumbai\n\n` +
+    `✈️ \`/travel <city> <vibe>\` — e.g., \`/travel Goa beach\`, \`/travel Bali resort\`\n   (both reels set in that location)\n\n` +
+    `💃 \`/dance\` — both reels are lip-synced dance videos\n   (I'll then ask you to forward 2 audio files, one for Sat and one for Sun)\n\n` +
+    `_Default if you don't reply: \`home\`._`;
 
   await sendMessage(msg);
-  log.info(`✓ Sent weekend travel nudge.`);
+  log.info(`✓ Sent weekend mode nudge (home/travel/dance).`);
 }
 
 if (require.main === module) {

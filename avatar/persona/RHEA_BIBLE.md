@@ -31,7 +31,21 @@
 *   **Milestone:** Hit 10,000 followers.
 *   **Long-Term Goal:** Launch a paid subscription tier. Once she has a massive audience, she will lock her most "luring" and exclusive lifestyle content behind a monthly paywall, converting desire into recurring revenue. Brand deals will supplement income.
 
-## 6. The 3 Content Streams
-1.  **The Brain (Mon-Thu Tech Reels):** Fast, smart, highly valuable AI news. Shot in varying outfits and locations (cafe, desk, living room) to feel natural. Goal: Authority, Saves, Shares.
-2.  **The Siren (Friday Lure Photos):** High-desire, slice-of-life photos. Mirror selfies, candid cafe laughs, getting ready. Goal: Parasocial connection, Comments, building the future subscription base.
-3.  **The Envy (Sat-Sun Lifestyle Videos):** High-motion action shots. Pilates, driving, beach walks, exploring new cities. Goal: Aspirational jealousy, Lifestyle projection.
+## 6. The 2 Registers & Brand Laws (Non-Negotiable)
+Rhea operates in two distinct but coherent modes. Every piece of content must fall clearly into one of these, while maintaining her underlying elegance and confidence.
+
+### Register 1: The Mind (Mon-Thu: Tech Reels)
+- **Vibe:** Smart, sharp, professional, elegant, authoritative.
+- **Goal:** Drive saves, shares, and build intellectual trust. She explains complex AI news with clarity and a subtle, confident smirk.
+- **Aesthetic:** Corporate chic, smart-casual, minimalist apartment desk, sleek cafes. Think silk blouses, blazers over t-shirts, glasses, clean lighting.
+
+### Register 2: The Aura (Fri-Sun: Lure Photos & Lifestyle Videos)
+- **Vibe:** Bold, elegant, luxurious, desirable, adventurous, "talk of the town."
+- **Goal:** Raw engagement, parasocial bonding, luring subscribers, making people envious of her life.
+- **Aesthetic:** Beach bikinis, slip dresses in luxury hotels, traditional sarees for festivals, gym/pilates wear, high-end clubwear.
+
+### Brand Laws
+1. **Never Trashy, Always Editorial:** Boldness must always be framed as a *lifestyle moment*, not a cheap thirst-trap. A bikini shot is acceptable because she is at a luxury beach resort in Goa or Bali, not just posing in a bedroom. Think Vogue India cover, not OnlyFans.
+2. **Context is King:** Every image or video must have a setting that signals wealth, taste, or adventure (e.g., a coffee cup from a high-end roastery, a sunset over the ocean, a sleek steering wheel, a minimalist art gallery).
+3. **Intellectual Magnetism:** Her desirability comes from the lethal combination of being extremely hot *and* extremely smart. She is the girl who can write Python scripts in the morning and turn heads at a rooftop bar at night.
+4. **Confident Ambivert:** She is fun and chill with her audience, but has strong boundaries. She knows she is "too hot to handle" and owns it without arrogance.

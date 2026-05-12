@@ -259,7 +259,7 @@ async function poll() {
     for (const u of updates) {
       lastUpdateId = u.update_id;
       const msg = u.message;
-      if (!msg || !msg.text) continue;
+      if (!msg) continue;
       const chatId = msg.chat.id;
       // Allow only the configured chat (or any if not set, for testing)
       if (TELEGRAM_CHAT_ID && String(chatId) !== String(TELEGRAM_CHAT_ID)) {
@@ -267,6 +267,13 @@ async function poll() {
         continue;
       }
 
+      // Audio/video/voice forwarded for dance mode
+      if (msg.audio || msg.video || msg.voice || msg.video_note) {
+        await handleForwardedAudio(chatId, msg);
+        continue;
+      }
+
+      if (!msg.text) continue;
       const text = msg.text.trim();
       log.info(`[${chatId}] ${text}`);
 
@@ -286,6 +293,10 @@ async function poll() {
         await handlePosted(chatId, text);
       } else if (text.startsWith('/travel')) {
         await handleTravel(chatId, text);
+      } else if (text === '/home' || text.startsWith('/home ')) {
+        await handleHome(chatId);
+      } else if (text === '/dance' || text.startsWith('/dance ')) {
+        await handleDance(chatId);
       } else if (text.startsWith('/weekly_stats')) {
         await handleWeeklyStats(chatId, text);
       } else if (text.startsWith('/stats_') || text.startsWith('/stats ')) {
@@ -954,6 +965,223 @@ async function handlePerf(chatId) {
   }
   msg += `_Best framework will be favored in next ideation._`;
   await reply(chatId, msg);
+}
+
+// =============================================================================
+// /home  — set both Sat & Sun lifestyle reels to be set in Bandra/Mumbai
+// =============================================================================
+async function handleHome(chatId) {
+  const db = dbModule.getClient();
+  const { sat, sun } = nextWeekendDates();
+  const updates = [];
+  for (const date of [sat, sun]) {
+    const { data } = await db.from('content_calendar')
+      .upsert({
+        target_date: date,
+        weekday: new Date(date).getDay(),
+        content_type: 'lifestyle_reel',
+        weekend_mode: 'home',
+        dance_audio_url: null,
+        dance_audio_filename: null,
+        state: 'pending',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'target_date,content_type' })
+      .select('id, target_date');
+    if (data) updates.push(data[0]);
+  }
+  // Also wipe any pending audio uploads (user changed their mind)
+  await db.from('pending_audio_uploads')
+    .update({ status: 'cancelled' })
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting');
+  await reply(chatId,
+    `🏠 *Home mode locked in.*\n\n` +
+    `Both Saturday and Sunday lifestyle reels will be set in Bandra/Mumbai.\n\n` +
+    `Sat (${sat}) and Sun (${sun}) are queued.`
+  );
+}
+
+// =============================================================================
+// /dance  — set both Sat & Sun reels to be lip-synced dance reels
+// User must then forward TWO audio files (one for Sat, one for Sun)
+// =============================================================================
+async function handleDance(chatId) {
+  const db = dbModule.getClient();
+  const { sat, sun } = nextWeekendDates();
+
+  // Mark both calendar rows as dance mode (audio_url will be filled later)
+  for (const date of [sat, sun]) {
+    await db.from('content_calendar')
+      .upsert({
+        target_date: date,
+        weekday: new Date(date).getDay(),
+        content_type: 'lifestyle_reel',
+        weekend_mode: 'dance',
+        dance_audio_url: null,
+        dance_audio_filename: null,
+        state: 'pending',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'target_date,content_type' });
+  }
+
+  // Wipe any prior pending uploads from this chat
+  await db.from('pending_audio_uploads')
+    .update({ status: 'cancelled' })
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting');
+
+  // Create two pending upload rows: Sat first, then Sun
+  await db.from('pending_audio_uploads').insert([
+    { chat_id: chatId, for_date: sat, weekend_mode: 'dance', status: 'awaiting' },
+    { chat_id: chatId, for_date: sun, weekend_mode: 'dance', status: 'awaiting' },
+  ]);
+
+  await reply(chatId,
+    `💃 *Dance mode locked in.*\n\n` +
+    `I'll need TWO audio files (one for each day).\n\n` +
+    `*Step 1 of 2:* Forward the audio you want for *Saturday's* (${sat}) dance reel now.\n\n` +
+    `_To forward an audio: open Instagram → Reel → Share icon → Telegram → Rhea Bot_`
+  );
+}
+
+// =============================================================================
+// handleForwardedAudio — user forwarded an audio/video. Resolve next pending.
+// =============================================================================
+async function handleForwardedAudio(chatId, msg) {
+  const db = dbModule.getClient();
+  // Find the next awaiting upload for this chat
+  const { data: pending } = await db.from('pending_audio_uploads')
+    .select('*')
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (!pending) {
+    await reply(chatId,
+      `ℹ️ I received an audio/video, but I'm not waiting for one right now.\n\n` +
+      `If you want to use this for a dance reel, type /dance first.`
+    );
+    return;
+  }
+
+  // Get file_id from the message (audio, video, voice, or video_note)
+  const fileObj = msg.audio || msg.video || msg.voice || msg.video_note;
+  if (!fileObj || !fileObj.file_id) {
+    await reply(chatId, `❌ Could not extract file from forwarded message.`);
+    return;
+  }
+
+  // Get file path from Telegram
+  let filePath;
+  try {
+    const fileInfo = await axios.get(`${API}/getFile`, { params: { file_id: fileObj.file_id } });
+    filePath = fileInfo.data.result.file_path;
+  } catch (err) {
+    await reply(chatId, `❌ Telegram file lookup failed: ${err.message}`);
+    return;
+  }
+
+  const fileName = (fileObj.file_name || filePath.split('/').pop() || `audio-${Date.now()}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+
+  // Download to /tmp, then upload to Supabase Storage
+  const fs = require('fs');
+  const path = require('path');
+  const { spawnSync } = require('child_process');
+  const tmpIn = path.join('/tmp', `tg-${Date.now()}-${fileName}`);
+  const tmpOut = path.join('/tmp', `tg-${Date.now()}-${fileName}.mp3`);
+
+  try {
+    const dl = await axios.get(downloadUrl, { responseType: 'arraybuffer', timeout: 120_000 });
+    fs.writeFileSync(tmpIn, Buffer.from(dl.data));
+  } catch (err) {
+    await reply(chatId, `❌ File download failed: ${err.message}`);
+    return;
+  }
+
+  // Extract audio with ffmpeg (handles video, audio, voice all the same)
+  const ff = spawnSync('ffmpeg', ['-y', '-i', tmpIn, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', tmpOut], { stdio: 'pipe' });
+  if (ff.status !== 0 || !fs.existsSync(tmpOut)) {
+    await reply(chatId, `❌ ffmpeg audio extraction failed (exit ${ff.status}).`);
+    try { fs.unlinkSync(tmpIn); } catch {}
+    return;
+  }
+
+  // Upload to Supabase Storage
+  const buf = fs.readFileSync(tmpOut);
+  const storagePath = `dance-audio/${pending.for_date}/${Date.now()}.mp3`;
+  const { error: upErr } = await db.storage.from('avi-images')
+    .upload(storagePath, buf, { contentType: 'audio/mpeg', upsert: true, cacheControl: '31536000' });
+
+  // Cleanup tmp
+  try { fs.unlinkSync(tmpIn); } catch {}
+  try { fs.unlinkSync(tmpOut); } catch {}
+
+  if (upErr) {
+    await reply(chatId, `❌ Supabase upload failed: ${upErr.message}`);
+    return;
+  }
+
+  const { data: pub } = db.storage.from('avi-images').getPublicUrl(storagePath);
+
+  // Update calendar row + mark pending row as resolved
+  await db.from('content_calendar')
+    .update({
+      dance_audio_url: pub.publicUrl,
+      dance_audio_filename: fileName,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('target_date', pending.for_date)
+    .eq('content_type', 'lifestyle_reel');
+
+  await db.from('pending_audio_uploads')
+    .update({
+      status: 'received',
+      audio_url: pub.publicUrl,
+      audio_filename: fileName,
+      resolved_at: new Date().toISOString(),
+    })
+    .eq('id', pending.id);
+
+  // Are there more pending uploads?
+  const { data: nextPending } = await db.from('pending_audio_uploads')
+    .select('for_date')
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (nextPending) {
+    const isSun = new Date(nextPending.for_date).getDay() === 0;
+    await reply(chatId,
+      `✅ Saved audio for *${pending.for_date}*: \`${fileName}\`\n\n` +
+      `*Step 2 of 2:* Forward the audio for *${isSun ? 'Sunday' : 'next day'}'s* (${nextPending.for_date}) dance reel now.`
+    );
+  } else {
+    await reply(chatId,
+      `✅ *Both audios locked in.*\n\n` +
+      `Most recent: ${pending.for_date} → \`${fileName}\`\n\n` +
+      `Renders fire automatically Sat 8 AM and Sun 8 AM IST.`
+    );
+  }
+}
+
+// Returns next Saturday (and the following Sunday) as YYYY-MM-DD strings.
+// If today is Sat or Sun, returns today's Sat (or yesterday's) and tomorrow's Sun.
+function nextWeekendDates() {
+  const now = new Date();
+  const dow = now.getDay(); // 0=Sun, 6=Sat
+  let satOffset;
+  if (dow === 6) satOffset = 0;          // today is Sat
+  else if (dow === 0) satOffset = -1;     // today is Sun, Sat was yesterday
+  else satOffset = 6 - dow;               // next Sat
+  const sat = new Date(now); sat.setDate(now.getDate() + satOffset);
+  const sun = new Date(sat); sun.setDate(sat.getDate() + 1);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { sat: fmt(sat), sun: fmt(sun) };
 }
 
 log.info('🤖 Telegram listener daemon starting...');

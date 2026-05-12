@@ -178,7 +178,49 @@ ${frameworksList}
     ? `You are writing content for the following persona:\n\n${persona.bible_md}\n\nBUSINESS GOAL: We are below 10k followers. Every reel must drive saves and follows aggressively. Every Friday lure post must tease the future subscription tier.`
     : persona.system_prompt;
 
+  // ========================================================================
+  // BRAND VOICE GUARDRAILS — Non-negotiable rules every concept MUST follow
+  // These are the difference between "random AI bikini page" and a magnetic
+  // multi-dimensional brand like Kiara Advani / Tara Sutaria.
+  // ========================================================================
+  const brandGuardrails = `
+BRAND VOICE GUARDRAILS (NON-NEGOTIABLE — every concept MUST obey ALL of these):
+
+1. CONTEXT IS KING. Every visual prompt MUST include a SPECIFIC place + activity + prop.
+   GOOD: "sitting at a chic Bandra cafe holding a matcha latte, MacBook open with code on screen"
+   BAD:  "smiling at the camera in a white dress" (no context, no activity)
+
+2. NEVER A BODY SHOT — ALWAYS A LIFESTYLE MOMENT.
+   The body must be incidental to the moment. Even bold/bikini scenes must have a justifying CONTEXT
+   (a beach, a luxury pool, a spa, a yacht) and at least ONE element of taste
+   (a coffee cup, a hardcover book, oversized sunglasses, a glass of champagne).
+   BANNED: bedroom-only thirst traps, random face close-ups, "come hither" bedroom poses.
+
+3. EDITORIAL-GRADE LANGUAGE in every visual prompt:
+   USE: "Vogue India editorial", "Bollywood-actress-tier", "magazine cover quality",
+        "paparazzi flash candid", "high-fashion editorial", "shot on Sony A7R IV"
+   AVOID: "selfie" (unless mirror selfie at vanity), "cute", "sexy", "hot".
+
+4. INTELLECTUAL MAGNETISM. Rhea is the IIT-Goldman engineer who turns heads at rooftops.
+   Her desirability comes from being EXTREMELY SMART + EXTREMELY HOT.
+   Concepts should reflect this duality: she reads AI papers in a bikini at an infinity pool.
+
+5. CULTURALLY ROOTED. Lean into traditional Indian (saree, lehenga, festivals) at least once per week.
+   This sets her apart from western AI influencers and unlocks brand deals from Indian fashion/beauty.
+
+6. ASPIRATIONAL WEALTH SIGNALS. Every shot should subtly signal lifestyle wealth:
+   luxury car, business class, Porsche steering wheel, Celine sunglasses, omakase counter,
+   art gallery, infinity pool, vintage Ambassador car.
+
+7. "TALK OF THE TOWN" ENERGY. Each concept must answer: would this be the post EVERY person
+   in her circle texts a friend about the next morning? If not, rewrite it.
+
+BANNED FRAMINGS: "just a face close-up", "bedroom only", "random dance", "just a smile",
+"just looking at camera", "posing", "thirst trap", "come hither".
+`;
+
   return `${personaContext}
+${brandGuardrails}
 ${perfBlock}
 ${trendsBlock}
 ${travelBlock}
