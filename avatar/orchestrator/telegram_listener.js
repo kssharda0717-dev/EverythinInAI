@@ -111,26 +111,30 @@ async function handlePick(chatId, idPrefix) {
     return reply(chatId, `✅ Today's render is already done.\n📥 ${calRow.output_url}`);
   }
 
-  // Mark all 3 concepts: chosen one is winner, others are not
+    // CAS (Compare-And-Set): only succeed if state is still pre-render.
+  // Prevents two concurrent /pick commands from both spawning orchestrators.
+  const { data: claimedRows } = await db.from('content_calendar')
+    .update({
+      concept_id: match.id,
+      state: 'picked',
+      picked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', calRow.id)
+    .in('state', ['ready', 'pending', 'failed'])  // exclude 'picked' and 'rendering' to prevent re-claiming
+    .select('id');
+  if (!claimedRows || claimedRows.length === 0) {
+    return reply(chatId, `⚠️ Pick lost the race — another /pick or render is already in progress for today.`);
+  }
+  // Only after we WIN the CAS do we touch the concepts table
   await db.from('reel_concepts').update({ is_winner: false }).eq('target_date', today);
   await db.from('reel_concepts').update({ is_winner: true }).eq('id', match.id);
-
-  // Update calendar: bind concept + mark picked
-  await db.from('content_calendar').update({
-    concept_id: match.id,
-    state: 'picked',
-    picked_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq('id', calRow.id);
-
   await reply(chatId,
     `✅ *Picked Concept ${match.angle?.toUpperCase() || '?'}*: ${match.title || match.hook || ''}\n\n` +
     `🎬 Render started in background.\n` +
     `⏱ Expect ~10 min.\n` +
     `I'll ping you with the URL + caption when ready.`
   );
-
-  // Fire the orchestrator in background
   spawnOrchestrator(calRow.id);
 }
 
@@ -159,18 +163,23 @@ async function handleGo(chatId) {
     return reply(chatId, `⚠️ Already rendering. Wait for completion.`);
   }
 
-  // For lure_photo and lifestyle_reel, no concept pick needed — just mark picked + fire
-  await db.from('content_calendar').update({
-    state: 'picked',
-    picked_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  }).eq('id', calRow.id);
-
+    // CAS: prevents cron + manual /go (or rapid /go /go) from both spawning.
+  const { data: claimedRows } = await db.from('content_calendar')
+    .update({
+      state: 'picked',
+      picked_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', calRow.id)
+    .in('state', ['ready', 'pending', 'failed'])  // exclude 'picked' and 'rendering' to prevent re-claiming
+    .select('id');
+  if (!claimedRows || claimedRows.length === 0) {
+    return reply(chatId, `⚠️ Lost the race — another /go is already firing the orchestrator for today.`);
+  }
   await reply(chatId,
     `🚀 Firing today's *${calRow.content_type.replace('_', ' ').toUpperCase()}*.\n` +
     `I'll ping you when ready.`
   );
-
   spawnOrchestrator(calRow.id);
 }
 
