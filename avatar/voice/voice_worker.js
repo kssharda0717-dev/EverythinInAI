@@ -91,6 +91,74 @@ function preprocessScript(text) {
   return out;
 }
 
+/**
+ * Split a script into chunks of <= maxChars each, breaking at sentence boundaries.
+ * Chatterbox has an internal ~200-character / ~16-second hard cap on output audio.
+ * Anything beyond that gets silently truncated. Splitting + concatenating WAVs
+ * is the only way to get long-form scripts spoken end-to-end.
+ */
+function splitIntoChunks(text, maxChars = 180) {
+  if ((text || '').length <= maxChars) return [text];
+  // Split on sentence-ending punctuation, keeping punctuation attached
+  const sentences = text.match(/[^.!?…]+[.!?…]+/g) || [text];
+  const chunks = [];
+  let current = '';
+  for (const sent of sentences) {
+    const trimmed = sent.trim();
+    if (!trimmed) continue;
+    if ((current + ' ' + trimmed).trim().length <= maxChars) {
+      current = (current + ' ' + trimmed).trim();
+    } else {
+      if (current) chunks.push(current);
+      // If a single sentence exceeds maxChars, force-split on commas as last resort
+      if (trimmed.length > maxChars) {
+        const subs = trimmed.split(/,\s+/);
+        let sub = '';
+        for (const s of subs) {
+          if ((sub + ', ' + s).trim().length <= maxChars) sub = (sub + ', ' + s).replace(/^,\s*/, '').trim();
+          else { if (sub) chunks.push(sub); sub = s; }
+        }
+        if (sub) chunks.push(sub);
+        current = '';
+      } else {
+        current = trimmed;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
+/**
+ * Concatenate multiple WAV buffers into one using ffmpeg's concat demuxer.
+ * Returns the combined WAV as a Buffer.
+ */
+async function concatWavBuffers(buffers) {
+  if (buffers.length === 1) return buffers[0];
+  const fs = require('fs');
+  const path = require('path');
+  const os = require('os');
+  const { spawnSync } = require('child_process');
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'voice-concat-'));
+  const inputs = [];
+  for (let i = 0; i < buffers.length; i++) {
+    const p = path.join(tmp, `part_${i}.wav`);
+    fs.writeFileSync(p, buffers[i]);
+    inputs.push(p);
+  }
+  const listFile = path.join(tmp, 'list.txt');
+  fs.writeFileSync(listFile, inputs.map(p => `file '${p}'`).join('\n'));
+  const outPath = path.join(tmp, 'combined.wav');
+  const r = spawnSync('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath], { stdio: 'pipe' });
+  if (r.status !== 0) {
+    throw new Error('ffmpeg concat failed: ' + (r.stderr?.toString().slice(-300) || 'unknown'));
+  }
+  const combined = fs.readFileSync(outPath);
+  // Cleanup
+  try { for (const p of inputs) fs.unlinkSync(p); fs.unlinkSync(listFile); fs.unlinkSync(outPath); fs.rmdirSync(tmp); } catch {}
+  return combined;
+}
+
 async function rehostAudio(sourceUrl, destPath) {
   const dbModule2 = require('../../engine/core/database');
   const axios = require('axios');
@@ -143,19 +211,42 @@ async function main() {
   }).eq('id', concept.id);
 
   const settings = persona.active_voice_settings || {};
-  log.info(`Generating audio with Chatterbox...`);
-  const result = await runModel('chatterbox', {
-    prompt: script,
-    audio_prompt: persona.active_voice_ref_url,
-    cfg_weight: settings.cfg_weight ?? 0.5,
-    temperature: settings.temperature ?? 0.8,
-    exaggeration: settings.exaggeration ?? 0.5,
-    seed: 0,
-  }, { timeoutMs: 300_000 });
+  const chunks = splitIntoChunks(script, 180);
+  log.info(`Generating audio with Chatterbox (${chunks.length} chunk${chunks.length>1?'s':''}, max 180 chars each)...`);
+  chunks.forEach((c, i) => log.info(`  chunk ${i+1}/${chunks.length} (${c.length} chars): ${c.slice(0, 80)}${c.length>80?'…':''}`));
 
-  const remoteUrl = Array.isArray(result.output) ? result.output[0] : result.output;
+  // Generate each chunk (parallel for speed)
+  const axios = require('axios');
+  const chunkResults = await Promise.all(chunks.map(async (chunkText) => {
+    const r = await runModel('chatterbox', {
+      prompt: chunkText,
+      audio_prompt: persona.active_voice_ref_url,
+      cfg_weight: settings.cfg_weight ?? 0.5,
+      temperature: settings.temperature ?? 0.8,
+      exaggeration: settings.exaggeration ?? 0.5,
+      seed: 0,
+    }, { timeoutMs: 300_000 });
+    const url = Array.isArray(r.output) ? r.output[0] : r.output;
+    const dl = await axios.get(url, { responseType: 'arraybuffer', timeout: 120_000 });
+    return { buf: Buffer.from(dl.data), cost: r.cost_usd };
+  }));
+
+  // Stitch the chunks together with ffmpeg
+  const combined = await concatWavBuffers(chunkResults.map(r => r.buf));
+  const totalCost = chunkResults.reduce((s, r) => s + (r.cost || 0), 0);
+  log.info(`✓ Combined ${chunks.length} chunk(s) into ${(combined.length/1024).toFixed(0)} KB WAV (cost: $${totalCost.toFixed(3)})`);
+
+  // Upload the combined WAV directly to Supabase (skip rehostAudio since we already have buffer)
+  const dbStorage = dbModule.getClient();
   const destPath = `voice-tracks/${concept.id}/${Date.now()}.wav`;
-  const hosted = await rehostAudio(remoteUrl, destPath);
+  const { error: upErr } = await dbStorage.storage.from('avi-images').upload(destPath, combined, {
+    contentType: 'audio/wav', upsert: true, cacheControl: '31536000',
+  });
+  if (upErr) throw new Error(`Upload failed: ${upErr.message}`);
+  const { data: pub } = dbStorage.storage.from('avi-images').getPublicUrl(destPath);
+  const hosted = { publicUrl: pub.publicUrl, storagePath: destPath, sizeBytes: combined.length };
+  // Fake a result object to match downstream code
+  const result = { cost_usd: totalCost };
 
   // Estimate duration assuming 16 kHz mono PCM ≈ buf.length / 32000 sec.
   // We don't have ffprobe, but we can compute roughly from content-length.

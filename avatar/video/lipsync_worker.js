@@ -69,26 +69,29 @@ async function rehostVideo(sourceUrl, destPath) {
 }
 
 /**
- * Run Wan 2.2 Speech-to-Video.
- *   - Input:  hero image URL + voice WAV URL + scene prompt
- *   - Output: talking-head MP4 at ~$0.02/sec (₹50 for 30s reel)
- *   - Falls back to OmniHuman if Wan 2.2 fails (rare).
+ * Run Pruna p-video-avatar (official Replicate model, $0.025/s at 720p).
+ *   - Input:  hero image URL + voice WAV URL
+ *   - Output: talking-head MP4 (~₹25-30 for a 12-second reel)
+ *   - Phoneme-aware lip-sync, fast (10-15s render), head-and-shoulders friendly.
+ *   - Falls back to OmniHuman ONLY if Pruna hard-fails (very rare for official models).
  * @returns {Promise<string>} URL of the rehosted MP4
  */
 async function generateTalkingHead({ heroImageUrl, voiceUrl, conceptId }) {
-  log.info(`Sending to Wan 2.2 S2V (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
-  log.info(`(Expect ~2-3 min on L40S GPU — do not interrupt)`);
+  log.info(`Sending to Pruna p-video-avatar (image=${heroImageUrl.substring(0, 60)}... audio=${voiceUrl.substring(0, 60)}...)`);
+  log.info(`(Expect ~10-15s render on L40S GPU)`);
 
   let result;
+  let usedModel = 'pruna_avatar';
   try {
-    result = await runModel('wan_2_2_s2v', {
+    result = await runModel('pruna_avatar', {
       image: heroImageUrl,
       audio: voiceUrl,
-      prompt: 'A young woman speaking naturally to the camera, gentle natural facial movements and expressions, professional content creator',
-      num_frames_per_chunk: 81,
-    }, { timeoutMs: 900_000 });
+      resolution: '720p',
+      video_prompt: 'The person is speaking calmly to the camera, natural subtle facial expressions, head and shoulders framing',
+    }, { timeoutMs: 300_000 });
   } catch (err) {
-    log.warn(`Wan 2.2 failed (${err.message?.slice(0,150)}), falling back to OmniHuman...`);
+    log.warn(`Pruna failed (${err.message?.slice(0,150)}), falling back to OmniHuman (₹280)...`);
+    usedModel = 'omni_human';
     result = await runModel('omni_human', {
       image: heroImageUrl,
       audio: voiceUrl,
@@ -96,7 +99,7 @@ async function generateTalkingHead({ heroImageUrl, voiceUrl, conceptId }) {
   }
 
   const remoteUrl = Array.isArray(result.output) ? result.output[0] : result.output;
-  log.info(`OmniHuman returned: ${remoteUrl}`);
+  log.info(`${usedModel} returned: ${remoteUrl}`);
   log.info(`Cost: ~$${result.cost_usd}, time: ${(result.generation_ms / 1000).toFixed(1)}s`);
 
   // Rehost to Supabase

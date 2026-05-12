@@ -76,9 +76,9 @@ const SETTINGS = {
 };
 
 const POSES = {
-  desk_lean: 'Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language, hands resting naturally in her lap or gently on the desk in front of her.',
-  casual_sit: 'Seated casually, shoulders relaxed, one arm resting softly on the armrest, open and conversational body language.',
-  attentive: 'Sitting straight, highly attentive posture, hands clasped loosely in front of her, engaging directly with the viewer.',
+  desk_lean: 'Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language.',
+  casual_sit: 'Seated casually, shoulders relaxed, open and conversational body language.',
+  attentive: 'Sitting straight, highly attentive posture, engaging directly with the viewer with a calm warm expression.',
 };
 
 function pickCombo(forceOutfitKey, conceptId) {
@@ -103,7 +103,7 @@ function pickCombo(forceOutfitKey, conceptId) {
 function buildHeroPrompt(persona, combo, trigger) {
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
-    `Three-quarter body framing showing head, shoulders, and upper torso including hands, palms relaxed and visible.`,
+    `Tight head-and-shoulders framing centered on her face. Hands NOT visible in frame, hands cropped out. Frame stops just above the chest. Clean shoulder line, no arms or hands shown. This is critical for talking-head video output.`,
     `Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging eyes.`,
     combo.pose.value,
     `Wearing ${combo.outfit.value}.`,
