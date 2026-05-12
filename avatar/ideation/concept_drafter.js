@@ -109,7 +109,7 @@ ${frameworksList}
    - hook: 1-2 short punchy sentences. MUST stop scroll. BANNED: "Hey guys", "Did you know", "Just saw".
    - body_script: EXACTLY 1-2 short sentences delivering pure value. NO FLUFF.
    - punchline: Open loop ending. MUST NOT restate body.
-   - cta: e.g., "Comment LINK and I'll DM you the repo".
+   - cta: A natural, conversational CTA. MUST NOT always be "Comment X and I'll DM you". Use variety like: "Drop the word X below and I'll send it over", "Want the link? Comment X", "Type X in the comments for the full breakdown".
    - full_script: hook + body_script + punchline + cta. MUST BE UNDER 50 WORDS.
    - estimated_seconds: 8-15.
    - b_roll_plan: array of {start_sec, end_sec, description}. First B-roll MUST start before second 3.
@@ -118,7 +118,9 @@ ${frameworksList}
    - angle: the slug of the framework used.
    - lure_level: ${lureLevel}.
 
-3. CRITICAL CTA RULES: The punchline AND caption MUST end with a DM-funnel CTA ("Comment [KEYWORD]"). NEVER use "Link in bio".
+3. CRITICAL CTA RULES: The script AND caption MUST end with a DM-funnel CTA (asking them to comment a keyword). NEVER use "Link in bio". Vary the phrasing so it sounds natural, not robotic.
+
+4. PAIN HOOK GUIDANCE: If using the 'pain_hook' framework, identify the specific frustration AI builders have about this topic (e.g., slow RAG, expensive API bills) and weaponise it in the first 10 words.
 `;
     outputSchema = `{
   "concepts": [

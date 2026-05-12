@@ -128,8 +128,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Montserrat,110,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
-Style: Highlight,Montserrat,110,&H0000FFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,8,4,2,80,80,250,1
+Style: Default,Montserrat,64,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,3,2,2,80,80,120,1
+Style: Highlight,Montserrat,64,&H00A4E1F5,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,3,2,2,80,80,120,1
 Style: Watermark,Montserrat,32,&HB0FFFFFF,&H000000FF,&H80000000,&H00000000,1,0,0,0,100,100,0,0,1,2,2,9,30,30,30,1
 Style: Outro,Montserrat,72,&H00FFFFFF,&H000000FF,&H00000000,&HC8000000,1,0,0,0,100,100,0,0,1,6,3,2,80,80,180,1
 
@@ -144,7 +144,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     const end = assTime2(c.end);
     const isHighlight = HIGHLIGHT_WORDS.test(c.text.replace(/[^a-z]/gi, ''));
     const style = isHighlight ? 'Highlight' : 'Default';
-    const text = `{\\fad(60,60)\\fscx140\\fscy140\\t(0,150,\\fscx100\\fscy100)}${c.text}`;
+    const text = `{\\fad(40,40)\\fscx115\\fscy115\\t(0,120,\\fscx100\\fscy100)}${c.text}`;
     return `Dialogue: 0,${start},${end},${style},,0,0,0,,${text}`;
   });
 
