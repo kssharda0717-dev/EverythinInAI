@@ -250,27 +250,28 @@ class AILabBlogsCollector extends BaseCollector {
     // We keep only verified-working direct RSS endpoints.
     // Anthropic/Meta/Mistral RSS are dead industry-wide; we accept the reduced
     // coverage rather than depend on flaky RSSHub public instances.
+    // Verified-working RSS feeds (curl + XML parser confirmed they have items).
+    // The Batch (deeplearning.ai) and Rachel Woods AI exchange returned 404 — dropped.
+    // TLDR AI returns near-empty XML — dropped.
     this.feeds = [
-      // OpenAI/Google/DeepMind/HF/BAIR blogs returned 0 items each in production —
-      // either pure RSS endpoints have died or the parser doesn't match their
-      // current schemas. Keeping them as best-effort but adding working
-      // AI-newsletter feeds that aggregate the same content cleaner.
       { name: 'OpenAI',            url: 'https://openai.com/blog/rss.xml' },
       { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml' },
       { name: 'BAIR Berkeley AI',  url: 'https://bair.berkeley.edu/blog/feed.xml' },
-      // High-signal AI newsletter feeds (curated daily AI news):
-      { name: 'TLDR AI',           url: 'https://tldr.tech/api/rss/ai' },
-      { name: 'The Batch',         url: 'https://www.deeplearning.ai/the-batch/feed/' },
       { name: 'Import AI',         url: 'https://importai.substack.com/feed' },
-      { name: 'Rachel Woods AI',   url: 'https://www.theaiexchange.com/feed' },
     ];
+    // AI labs publish 1-2 posts per WEEK, not multiple per hour like Reddit/HN.
+    // The incremental cron's 6h sinceTimestamp filter killed every item. Use a
+    // 14-day window for these feeds regardless of what the orchestrator passes.
+    this.minLookbackDays = 14;
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   }
 
   async collect(sinceTimestamp) {
     const items = [];
-    const sinceMs = (sinceTimestamp || 0) * 1000;
-
+    // Honour caller's window OR our minLookbackDays floor, whichever is wider.
+    const callerSinceMs = (sinceTimestamp || 0) * 1000;
+    const floorSinceMs = Date.now() - (this.minLookbackDays * 86_400_000);
+    const sinceMs = callerSinceMs > 0 ? Math.min(callerSinceMs, floorSinceMs) : floorSinceMs;
     for (const feed of this.feeds) {
       try {
         const xmlText = await this.fetchWithRetry(feed.url, { responseType: 'text' });
