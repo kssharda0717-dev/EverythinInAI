@@ -27,16 +27,36 @@ const { createLogger } = require('../../engine/utils/logger');
 
 const log = createLogger('signal_picker');
 
+// Type weights tuned for an AI-tools-news brand:
+//   tools and products are what we cover → huge boost
+//   releases (model launches, big startup launches) are great → modest boost
+//   research papers and tutorials are dry for short-form video → penalty
+//   memes and funding/drama still have place but rarely happen
 const TYPE_BOOSTS = {
-  release: 10,
-  drama:   10,
-  meme:    15,
-  funding: 5,
-  news:    5,
-  research: 0,
-  tutorial: 0,
-  opinion: -5,
-  tool:    -2,  // tools handled separately, but keep selectable
+  tool:     25,   // 🔥 our brand is AI tools — surface them aggressively
+  product:  25,   // alias for tool
+  release:  12,   // model/startup launches
+  drama:    10,
+  meme:     15,
+  funding:   5,
+  news:      5,
+  research: -8,   // papers are dry for our format
+  tutorial: -10,  // walkthroughs are great long-form, weak short-form
+  opinion:  -5,
+};
+
+// Source weights: avoid github-only monoculture, lift product-discovery sources
+const SOURCE_BASE_BOOSTS = {
+  product_hunt:  15,
+  producthunt:   15,
+  replicate:     12,
+  huggingface:   10,
+  hackernews:     5,
+  reddit:         3,
+  twitter:        3,
+  github:         0,    // already over-represented
+  github_trending: 0,
+  arxiv:        -10,    // papers, not tools
 };
 
 function freshnessBoost(publishedAt) {
@@ -54,11 +74,16 @@ function engagementBoost(upvotes, comments) {
   return Math.min(20, Math.log2(total + 1));
 }
 
-function scoreSignal(sig, recentEntityCounts = {}) {
+function scoreSignal(sig, recentEntityCounts = {}, sourceFatiguePenalty = {}) {
   const base = (sig.virality_score || 0) * 10;
   const fresh = freshnessBoost(sig.published_at || sig.added_at);
   const eng = engagementBoost(sig.upvotes, sig.comments);
   const typeB = TYPE_BOOSTS[sig.type] || 0;
+
+  // Source bias: base boost (favor product/tool sources, penalize github monoculture)
+  // PLUS dynamic fatigue: if this source dominated recent winners, penalize further.
+  const src = (sig.source || '').toLowerCase();
+  const sourceB = (SOURCE_BASE_BOOSTS[src] || 0) + (sourceFatiguePenalty[src] || 0);
 
   // Recency penalty: was the same entity used in last 7 days?
   let recencyPenalty = 0;
@@ -69,7 +94,57 @@ function scoreSignal(sig, recentEntityCounts = {}) {
     }
   }
 
-  return Math.round(base + fresh + eng + typeB + recencyPenalty);
+  return Math.round(base + fresh + eng + typeB + sourceB + recencyPenalty);
+}
+
+/**
+ * Compute a per-source fatigue penalty based on the last 5 winners.
+ * If a source dominates recent picks, candidates from that source get penalised
+ * and other sources get a positive bonus to force variety.
+ */
+async function getSourceFatiguePenalty(personaId, lookbackDays = 7) {
+  const db = dbModule.getClient();
+  const since = new Date(Date.now() - lookbackDays * 86400_000).toISOString().slice(0, 10);
+  const { data: winners } = await db
+    .from('reel_concepts')
+    .select('signal_id')
+    .eq('persona_id', personaId)
+    .eq('is_winner', true)
+    .gte('target_date', since)
+    .not('signal_id', 'is', null)
+    .order('target_date', { ascending: false })
+    .limit(5);
+
+  const sigIds = (winners || []).map(w => w.signal_id);
+  if (sigIds.length === 0) return {};
+
+  const { data: sigs } = await db
+    .from('ai_signals')
+    .select('source')
+    .in('id', sigIds);
+
+  const counts = {};
+  for (const s of (sigs || [])) {
+    const src = (s.source || '').toLowerCase();
+    counts[src] = (counts[src] || 0) + 1;
+  }
+
+  const penalty = {};
+  const total = sigs?.length || 0;
+  if (total === 0) return {};
+
+  for (const [src, count] of Object.entries(counts)) {
+    const ratio = count / total;
+    if (ratio >= 0.6) penalty[src] = -25;       // 3+ of 5 → strong penalty
+    else if (ratio >= 0.4) penalty[src] = -10;
+  }
+
+  // Inverse boost for under-represented sources (forces variety)
+  for (const src of Object.keys(SOURCE_BASE_BOOSTS)) {
+    if (!counts[src]) penalty[src] = (penalty[src] || 0) + 10;
+  }
+
+  return penalty;
 }
 
 async function getRecentEntityCounts(personaId, days = 7) {
@@ -208,6 +283,10 @@ async function pickTopSignals(personaId, options = {}) {
   const recentEntityCounts = await getRecentEntityCounts(personaId);
   const usedIds = await getUsedSignalIds(personaId);
   const usedTopicKeys = await getUsedTopicKeys(personaId);
+  const sourceFatiguePenalty = await getSourceFatiguePenalty(personaId);
+  if (Object.keys(sourceFatiguePenalty).length > 0) {
+    log.info(`Source fatigue penalties this run: ${JSON.stringify(sourceFatiguePenalty)}`);
+  }
 
   // Also dedupe by canonical topic within today's candidate batch (so we don't
   // suggest two duplicate-but-different-id signals about the same paper).
@@ -230,7 +309,7 @@ async function pickTopSignals(personaId, options = {}) {
     })
     .map(s => ({
       signal: s,
-      score: scoreSignal(s, recentEntityCounts),
+      score: scoreSignal(s, recentEntityCounts, sourceFatiguePenalty),
     }))
     .sort((a, b) => b.score - a.score);
 
