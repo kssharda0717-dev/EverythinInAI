@@ -31,20 +31,54 @@ class RedditCollector extends BaseCollector {
     ];
   }
 
+  // Get a Reddit OAuth token. Cached for 1 hour.
+  // Requires REDDIT_CLIENT_ID + REDDIT_CLIENT_SECRET in env. If absent, returns null
+  // and we fall back to public www.reddit.com (which now 403s from server IPs but
+  // works from residential IPs).
+  async _getRedditToken() {
+    if (this._tokenCache && this._tokenCache.expires > Date.now()) return this._tokenCache.token;
+    const clientId = process.env.REDDIT_CLIENT_ID;
+    const clientSecret = process.env.REDDIT_CLIENT_SECRET;
+    if (!clientId || !clientSecret) return null;
+    try {
+      const axios = require('axios');
+      const res = await axios.post(
+        'https://www.reddit.com/api/v1/access_token',
+        'grant_type=client_credentials',
+        {
+          auth: { username: clientId, password: clientSecret },
+          headers: {
+            'User-Agent': 'EverythinInAI/1.0 (by u/everythininai_bot)',
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          timeout: 10000,
+        },
+      );
+      const token = res.data?.access_token;
+      if (!token) return null;
+      this._tokenCache = { token, expires: Date.now() + 55 * 60_000 };  // refresh after 55min
+      this.log.info('Acquired Reddit OAuth token');
+      return token;
+    } catch (err) {
+      this.log.warn(`Reddit OAuth failed: ${err.message}; falling back to public endpoint`);
+      return null;
+    }
+  }
+
   async collect(sinceTimestamp /* unused — reddit gives last 25 by default */) {
     const items = [];
+    const token = await this._getRedditToken();
+    const baseHost = token ? 'https://oauth.reddit.com' : 'https://www.reddit.com';
     for (const sub of this.subreddits) {
       try {
-        // Reddit blocks unauthenticated bot UAs; use a real-browser UA + Accept header.
-        // .json suffix is still public read for most subs as long as UA looks legit.
-        const url = `https://www.reddit.com/r/${sub}/hot.json?limit=50`;
-        const data = await this.fetchWithRetry(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/json,text/html,*/*',
-            'Accept-Language': 'en-US,en;q=0.9',
-          },
-        });
+        const url = `${baseHost}/r/${sub}/hot.json?limit=50`;
+        const headers = {
+          'User-Agent': 'EverythinInAI/1.0 (by u/everythininai_bot)',
+          'Accept': 'application/json,text/html,*/*',
+          'Accept-Language': 'en-US,en;q=0.9',
+        };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        const data = await this.fetchWithRetry(url, { headers });
         const posts = data?.data?.children || [];
         let added = 0;
         for (const p of posts) {
@@ -83,6 +117,9 @@ class ArxivCollector extends BaseCollector {
     super('arxiv');
     this.categories = ['cs.AI', 'cs.CL', 'cs.LG'];
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
+    // ArXiv API is slow, especially for cs.AI. Default 15s timeout caused that
+    // category to consistently fail. Bump to 30s.
+    this.timeoutMs = 30000;
   }
 
     async collect(sinceTimestamp) {
@@ -214,14 +251,18 @@ class AILabBlogsCollector extends BaseCollector {
     // Anthropic/Meta/Mistral RSS are dead industry-wide; we accept the reduced
     // coverage rather than depend on flaky RSSHub public instances.
     this.feeds = [
-      { name: 'OpenAI',           url: 'https://openai.com/blog/rss.xml' },
-      { name: 'Google Research',  url: 'https://research.google/blog/rss/' },
-      { name: 'DeepMind',         url: 'https://deepmind.google/blog/rss.xml' },
-      // Working alternative high-signal AI feeds:
+      // OpenAI/Google/DeepMind/HF/BAIR blogs returned 0 items each in production —
+      // either pure RSS endpoints have died or the parser doesn't match their
+      // current schemas. Keeping them as best-effort but adding working
+      // AI-newsletter feeds that aggregate the same content cleaner.
+      { name: 'OpenAI',            url: 'https://openai.com/blog/rss.xml' },
       { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml' },
-      // Stability AI killed their RSS feed (404). Removed.
-      // { name: 'Stability AI Blog', url: 'https://stability.ai/blog?format=rss' },
-      { name: 'BAIR Berkeley AI', url: 'https://bair.berkeley.edu/blog/feed.xml' },
+      { name: 'BAIR Berkeley AI',  url: 'https://bair.berkeley.edu/blog/feed.xml' },
+      // High-signal AI newsletter feeds (curated daily AI news):
+      { name: 'TLDR AI',           url: 'https://tldr.tech/api/rss/ai' },
+      { name: 'The Batch',         url: 'https://www.deeplearning.ai/the-batch/feed/' },
+      { name: 'Import AI',         url: 'https://importai.substack.com/feed' },
+      { name: 'Rachel Woods AI',   url: 'https://www.theaiexchange.com/feed' },
     ];
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
   }
