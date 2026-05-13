@@ -66,11 +66,19 @@ class BaseCollector {
 
   /**
    * Create a normalized item object.
+   *
+   * Accepts BOTH `title`/`description` AND `raw_title`/`raw_description` as input.
+   * The 5 v2 collectors (Reddit, ArXiv, HuggingFace, AILabBlogs, Replicate,
+   * GitHubTrending) use the shorter `title` / `description`. Without aliasing,
+   * every item from those scrapers landed in the queue with empty raw_title and
+   * was rejected by the classifier — which is why all 5 had 0 tools in the live DB.
    */
   createItem(fields) {
+    const title = fields.raw_title || fields.title || '';
+    const description = fields.raw_description || fields.description || '';
     return {
-      raw_title: (fields.raw_title || '').substring(0, 1000),
-      raw_description: (fields.raw_description || '').substring(0, 5000),
+      raw_title: String(title).substring(0, 1000),
+      raw_description: String(description).substring(0, 5000),
       url: fields.url || '',
       source: fields.source || this.name,
       source_url: fields.source_url || '',

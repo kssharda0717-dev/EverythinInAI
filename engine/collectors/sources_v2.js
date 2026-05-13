@@ -219,7 +219,8 @@ class AILabBlogsCollector extends BaseCollector {
       { name: 'DeepMind',         url: 'https://deepmind.google/blog/rss.xml' },
       // Working alternative high-signal AI feeds:
       { name: 'Hugging Face Blog', url: 'https://huggingface.co/blog/feed.xml' },
-      { name: 'Stability AI Blog', url: 'https://stability.ai/blog?format=rss' },
+      // Stability AI killed their RSS feed (404). Removed.
+      // { name: 'Stability AI Blog', url: 'https://stability.ai/blog?format=rss' },
       { name: 'BAIR Berkeley AI', url: 'https://bair.berkeley.edu/blog/feed.xml' },
     ];
     this.parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' });
@@ -351,7 +352,8 @@ class GitHubTrendingCollector extends BaseCollector {
       let match;
       let added = 0;
       while ((match = repoRegex.exec(html)) !== null && added < 30) {
-        const fullName = match[1];
+        // Strip trailing /stargazers, /issues, /pulls etc. so we get the canonical repo URL
+        const fullName = match[1].replace(/\/(stargazers|issues|pulls|forks|wiki)$/, '');
         if (seen.has(fullName)) continue;
         seen.add(fullName);
         const repoUrl = `https://github.com/${fullName}`;
