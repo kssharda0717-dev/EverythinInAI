@@ -171,10 +171,16 @@ function pickSceneForToday() {
 // Tuned for Samiikssha-tier realism: specific lens, film stock, lighting anchors.
 const STYLE_ANCHOR = `Photographic style: shot on iPhone 15 Pro Max main camera, 24mm lens, photorealistic ultra-detailed natural skin texture, visible pores, natural subtle makeup, cinematic depth of field, casual Instagram influencer aesthetic, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, soft ambient lighting, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, no plastic skin.`;
 
+// Tasteful body descriptor: visibly hourglass figure with fuller hips and
+// defined waist that reads as natural and aspirational, not exaggerated/fake.
+// Applied ONLY to lure photos (Friday) and lifestyle videos (Sat-Sun).
+// Tech reels stay head-and-shoulders unchanged.
+const CURVY_BODY = 'tasteful hourglass figure, gently fuller hips, defined waist, naturally proportioned bust, soft feminine silhouette, natural body curves, never exaggerated, never artificial';
+
 function buildPrompt(sceneKey, persona, trigger) {
   const scene = SCENES[sceneKey];
   return [
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
     STYLE_ANCHOR,
@@ -189,7 +195,13 @@ function buildPromptFromConcept(concept, trigger) {
   let prompt = concept.image_prompt || '';
   // Ensure the LoRA trigger token is present
   if (!prompt.includes(trigger) && !prompt.includes('AVI_TOK')) {
-    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. ${prompt}`;
+    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. ${prompt}`;
+  } else if (!prompt.toLowerCase().includes('hourglass') && !prompt.toLowerCase().includes('curves')) {
+    // LLM-supplied prompt didn't describe the body — inject the curvy descriptor early.
+    prompt = prompt.replace(
+      /Indian content creator/i,
+      `Indian content creator with ${CURVY_BODY}`
+    );
   }
   // Reinforce style if the LLM forgot
   if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {

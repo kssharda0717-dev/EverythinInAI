@@ -178,6 +178,11 @@ function parseArgs(argv) {
   return args;
 }
 
+// Tasteful body descriptor: visibly hourglass figure with fuller hips and
+// defined waist that reads as natural and aspirational, not exaggerated/fake.
+// Applied to all lifestyle reel prompts (Sat-Sun). Tech reels stay unchanged.
+const CURVY_BODY = 'tasteful hourglass figure, gently fuller hips, defined waist, naturally proportioned bust, soft feminine silhouette, natural body curves, never exaggerated, never artificial';
+
 function pickMood(forceKey) {
   const keys = Object.keys(MOODS);
   if (forceKey && MOODS[forceKey]) return forceKey;
@@ -190,7 +195,7 @@ function buildHeroPrompt(mood, trigger) {
     return mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '') + ' Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.';
   }
   return [
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
     mood.keyframe_prompt + '.',
     mood.outfit ? `Wearing: ${mood.outfit}.` : '',
     `Photographic style: cinematic action photograph, shot on Sony A7R IV with 50mm prime at f/2.0, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.`,
@@ -283,7 +288,7 @@ async function main() {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `dance-${runId.slice(0, 14)}-`));
 
     // Step 1: hero image — Rhea in dance pose, mid-move
-    const danceHeroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic stance with confident gaze at the camera, head and shoulders framing prominent. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion. Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, high-fashion editorial quality, NOT illustration, NOT cartoon, NOT cgi.`;
+    const danceHeroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic full-body stance showing her hourglass silhouette in motion, confident gaze at the camera. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion. Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, high-fashion editorial quality, NOT illustration, NOT cartoon, NOT cgi.`;
     const heroSeed = Math.floor(Math.random() * 1_000_000);
     log.info(`[1/3] Rendering dance hero image (Flux+LoRA)...`);
     const heroResult = await runModel('flux_dev_lora', {
@@ -357,8 +362,15 @@ async function main() {
     moodKey = concept.angle || 'llm_concept';
     // Build the mood object from concept fields. The LLM's prompts override the static MOODS map.
     let kfPrompt = concept.keyframe_prompt;
+    // Inject curvy descriptor if the LLM-generated prompt didn't include one
+    if (!kfPrompt.toLowerCase().includes('hourglass') && !kfPrompt.toLowerCase().includes('curves')) {
+      kfPrompt = kfPrompt.replace(
+        /Indian content creator/i,
+        `Indian content creator with ${CURVY_BODY}`
+      );
+    }
     if (!kfPrompt.includes(trigger) && !kfPrompt.includes('AVI_TOK')) {
-      kfPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. ${kfPrompt}`;
+      kfPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. ${kfPrompt}`;
     }
     mood = {
       label: concept.title || 'LLM Lifestyle Concept',
