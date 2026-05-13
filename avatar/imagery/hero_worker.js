@@ -31,16 +31,28 @@ const log = createLogger('hero_worker');
 // NO NECKLACES — the LoRA tends to merge necklaces into skin/clothing, looking weird.
 // Just the outfit + ear accents only.
 // Outfits engineered for talking-head lipsync safety:
-// - Clean lower necklines (round / V-neck / scoop / camisole strap) so there's a clean
-//   separation between fabric and the neck. Turtlenecks/chokers/high collars FOLD and DISTORT
-//   when Pruna or Wan move the head during lipsync (creates the 'floating cloth' artifact).
-// - Small stud earrings only; no necklaces (they move with talking and look unnatural).
+// - Clean lower necklines (round / V-neck / scoop / camisole strap / sweetheart)
+// - No turtlenecks/chokers/high collars (they fold and distort during lipsync)
+// - Small stud earrings only; no necklaces
 const OUTFITS = {
+  // Warm Neutrals
   cream_round_tee:   'fitted cream cotton round-neck t-shirt, clean wide neckline well below collarbones, no necklace, simple small gold stud earrings, minimalist editorial',
-  black_vneck:       'fitted black soft cotton v-neck top, clean wide v-neckline, no necklace, no jewelry, minimalist',
   beige_blazer_open: 'tailored beige blazer worn open over fitted plain white cotton tank, clean low scoop neckline, no necklace, simple small gold studs, professional editorial',
   ivory_silk_open:   'flowy ivory silk blouse with first two buttons undone showing a clean open neckline, no necklace, no jewelry, soft editorial',
+  
+  // Cool Tones
+  black_vneck:       'fitted black soft cotton v-neck top, clean wide v-neckline, no necklace, no jewelry, minimalist',
   charcoal_scoop:    'fitted charcoal grey cotton scoop-neck tee, wide soft neckline, no necklace, small gold studs, clean editorial',
+  midnight_cami:     'fitted midnight blue silk camisole with thin straps, clean shoulder line, no necklace, simple silver studs, elegant evening editorial',
+  
+  // Bold / High-Contrast
+  berry_sweetheart:  'fitted deep berry red top with sweetheart neckline, clean open chest, no necklace, small gold hoop earrings, bold confident editorial',
+  emerald_silk:      'emerald green silk blouse with wide open V-neckline, no necklace, delicate gold stud earrings, luxurious editorial',
+  sapphire_wrap:     'sapphire blue wrap-style top with clean deep V-neck, no necklace, no jewelry, striking modern editorial',
+  
+  // Rich Accents
+  mustard_ribbed:    'fitted mustard yellow ribbed scoop-neck top, wide soft neckline, no necklace, simple gold studs, warm vibrant editorial',
+  oxblood_blazer:    'tailored oxblood red blazer over plain black scoop-neck tank, clean open neckline, no necklace, small gold studs, powerful editorial',
   dusty_pink_cami:   'fitted dusty pink silk camisole with thin straps, clean shoulder line, no necklace, simple gold studs, soft feminine editorial',
 };
 
@@ -74,29 +86,43 @@ async function getConcept(db, args) {
 }
 
 const SETTINGS = {
-  home_desk: 'clean simple out-of-focus warm-toned interior, soft plain wall with subtle warm gradient, no busy details, gentle bokeh, matte black laptop on the desk just barely visible at the edge of the frame',
-  cafe_window: 'blurred background of a quiet minimalist cafe, soft natural daylight coming from a window off-camera, warm aesthetic',
-  library_nook: 'soft out-of-focus background of wooden bookshelves with warm ambient lighting, cozy and intellectual vibe',
-  minimal_studio: 'pure soft minimalist studio background, neutral beige tone, very shallow depth of field',
+  bandra_apartment: 'clean simple out-of-focus warm-toned luxury apartment interior, soft plain wall with subtle warm gradient, gentle bokeh, Mumbai skyline faintly visible through a distant window',
+  glass_office:     'blurred background of a high-end corporate glass office at dusk, sleek modern architecture, subtle cool blue and warm amber lighting reflections, professional Goldman Sachs vibe',
+  luxury_rooftop:   'out-of-focus luxury rooftop lounge at golden hour, warm sunset lighting, subtle bokeh of string lights and distant city buildings, high-end aspirational vibe',
+  art_gallery:      'blurred background of a modern minimalist art gallery, stark white walls with soft gallery spotlights, sophisticated intellectual aesthetic',
+  luxe_car:         'out-of-focus interior of a luxury car, subtle premium leather textures and warm ambient dashboard lighting, high-status lifestyle vibe',
+  hotel_suite:      'blurred background of a premium 5-star hotel suite, floor-to-ceiling windows with soft daylight, luxurious beige and cream tones, aspirational wealth',
+  cafe_window:      'blurred background of a quiet minimalist upscale cafe, soft natural daylight coming from a window off-camera, warm chic aesthetic',
+  library_nook:     'soft out-of-focus background of rich wooden bookshelves with warm ambient lighting, cozy but highly intellectual vibe',
 };
 
 const POSES = {
-  desk_lean: 'Sitting upright with relaxed natural posture, slight forward lean of the torso, comfortable open body language.',
-  casual_sit: 'Seated casually, shoulders relaxed, open and conversational body language.',
-  attentive: 'Sitting straight, highly attentive posture, engaging directly with the viewer with a calm warm expression.',
+  confident_smirk:  'Sitting upright with relaxed natural posture, slight confident smirk, looking directly at the camera with magnetic energy.',
+  head_tilt:        'Seated casually, slight playful head tilt, knowing smile, open and highly engaging body language.',
+  mid_thought:      'Sitting straight, looking slightly off-camera as if mid-thought, highly intellectual and observant expression.',
+  intellectual:     'Seated with a slight forward lean, calm warm expression, engaging directly with the viewer, sharp and attentive.',
+  lean_back:        'Relaxed posture leaning slightly back, exuding effortless confidence and quiet luxury, subtle warm smile.',
+  mid_laugh:        'Captured mid-laugh with a bright genuine smile, eyes sparkling with fun, highly charismatic and open energy.',
 };
 
 function pickCombo(forceOutfitKey, conceptId) {
-  const hash = conceptId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+  // Use a better hash to avoid clustering
+  let hash = 0;
+  for (let i = 0; i < conceptId.length; i++) {
+    hash = ((hash << 5) - hash) + conceptId.charCodeAt(i);
+    hash |= 0; // Convert to 32bit integer
+  }
+  hash = Math.abs(hash);
 
   const outfitKeys = Object.keys(OUTFITS);
   const outfitKey = forceOutfitKey && OUTFITS[forceOutfitKey] ? forceOutfitKey : outfitKeys[hash % outfitKeys.length];
 
   const settingKeys = Object.keys(SETTINGS);
-  const settingKey = settingKeys[(hash * 2) % settingKeys.length];
+  // Use coprime multipliers to ensure even distribution across the 576-combo space
+  const settingKey = settingKeys[(hash * 7) % settingKeys.length];
 
   const poseKeys = Object.keys(POSES);
-  const poseKey = poseKeys[(hash * 3) % poseKeys.length];
+  const poseKey = poseKeys[(hash * 13) % poseKeys.length];
 
   return {
     outfit:  { key: outfitKey,  value: OUTFITS[outfitKey]  },
