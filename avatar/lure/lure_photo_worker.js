@@ -36,6 +36,21 @@ const log = createLogger('lure_photo');
 const W = 1080;
 const H = 1350;
 
+// Tasteful body descriptor: visibly hourglass figure with fuller hips and
+// defined waist that reads as natural and aspirational, not exaggerated/fake.
+// Applied ONLY to lure photos (Friday) and lifestyle videos (Sat-Sun).
+// Tech reels stay head-and-shoulders unchanged.
+// UPDATED: Anchored to concrete Bollywood-actress-tier builds to prevent Flux
+// from defaulting to a stick figure despite the "curves" keyword.
+const CURVY_BODY = 'visibly hourglass figure with defined fuller hips and bust, body-positive proportions similar to a fit South Indian actress, beautiful feminine silhouette, never exaggerated, never artificial';
+
+// Explicit hand anchor to prevent deformed/melted hands when holding props
+const HANDS_ANCHOR = 'hands clearly visible and perfectly formed, fingers properly defined and anatomically correct, holding prop naturally';
+
+// Explicit OUTCOME SPEC to force Flux out of its "AI sheen" default.
+// Pushes hard against the over-smooth, over-symmetric "AI girl" look.
+const OUTCOME_SPEC = 'OUTCOME SPEC: This must look like a real, candid iPhone Instagram photo taken by a real photographer. Skin must show visible pores, faint freckles, subtle imperfections, natural skin texture variation, slight uneven blush on cheeks, faint shine on T-zone. Face must have natural asymmetry, slightly uneven eyes, a real human nose with slight imperfection, lips with natural texture not glossy plastic. Lighting must have real-world depth with hard and soft shadows. The image must have subtle 35mm film grain texture throughout. The background must be a real physical place with clutter, texture, and depth. It must NOT look like AI art, must NOT have plastic skin, must NOT have perfect symmetry, must NOT look airbrushed.';
+
 // 6 lure scene templates. Focus: highly engaging, natural slice-of-life moments.
 // 20 curated lure scenes across 4 brand buckets (Editorial Bold, Aspirational Casual, Traditional Elegance, Luxury Lifestyle)
 // Every scene has a CONTEXT (place + activity + prop) so it reads as 'lifestyle moment', not 'body shot'.
@@ -43,109 +58,114 @@ const SCENES = {
   // === EDITORIAL BOLD (5) ===
   beach_editorial: {
     label: 'Editorial beach in Goa',
-    scene: 'standing on pristine white-sand beach holding a fresh coconut, confident magnetic gaze at camera, golden hour sunlight, Vogue India editorial framing, ocean and palm trees blurred behind',
-    outfit: 'minimalist black bikini with delicate gold body chain, beachy waves in hair, sunkissed skin, no excessive makeup',
+    scene: `facing the camera directly with a confident, magnetic gaze, standing on a pristine white-sand beach holding a fresh coconut with both hands (${HANDS_ANCHOR}), golden hour sunlight, Vogue India editorial framing, ocean and palm trees blurred behind`,
+    outfit: 'vibrant crimson red bikini top with flowing floral palazzo pants, beachy waves in hair, sunkissed skin, bold desirable aesthetic',
   },
   hotel_balcony_slip: {
     label: 'Luxury hotel suite balcony',
-    scene: 'standing on a luxury hotel suite balcony at golden hour, holding a coffee cup from the in-room espresso machine, looking out at city skyline, smirking slightly, hair tousled, classy slice-of-life moment',
-    outfit: 'deep emerald silk slip dress, delicate diamond necklace, hair in loose waves',
+    scene: `facing the camera directly, leaning back slightly against a luxury hotel suite balcony railing at golden hour, holding a coffee cup at chest level (${HANDS_ANCHOR}), eye contact with a knowing smirk, hair tousled, classy but highly desirable slice-of-life moment`,
+    outfit: 'deep emerald silk slip dress showing collarbones, delicate diamond necklace, hair in loose waves',
   },
   infinity_pool_book: {
     label: 'Infinity pool with book',
-    scene: 'lounging at the edge of an infinity pool overlooking a tropical jungle, reading a hardcover book on AI strategy, holding a glass of fresh coconut water, oversized Celine sunglasses on head, perfect blend of intellect and aesthetic',
-    outfit: 'white one-piece swimsuit with elegant cutouts, classy resort aesthetic, no jewelry',
+    scene: `facing the camera directly, lounging at the edge of an infinity pool overlooking a tropical jungle, holding a hardcover book on AI strategy resting on her lap (${HANDS_ANCHOR}), oversized Celine sunglasses pushed up on head, perfect blend of intellect and hot aesthetic`,
+    outfit: 'royal blue one-piece swimsuit with elegant side cutouts, classy resort aesthetic, no jewelry',
   },
   rooftop_bar_red: {
     label: 'Rooftop bar Mumbai night',
-    scene: 'late night at exclusive rooftop bar in Mumbai, holding a martini glass, paparazzi flash photography style candid, city lights blurred behind, magnetic talk-of-the-town energy',
-    outfit: 'bold tailored red blazer with nothing underneath, sleek black trousers, delicate diamond drop earrings',
+    scene: `facing the camera directly, late night at exclusive rooftop bar in Mumbai, holding a martini glass near her face (${HANDS_ANCHOR}), paparazzi flash photography style candid, city lights blurred behind, magnetic talk-of-the-town energy`,
+    outfit: 'bold tailored red blazer worn open with a black lace bralette underneath, sleek black trousers, delicate diamond drop earrings',
   },
-  pilates_post: {
-    label: 'Post-pilates studio mirror',
-    scene: 'post-workout mirror selfie inside a high-end pilates studio, glowing natural skin with light sweat, messy high bun, holding a sleek steel water bottle, aspirational fitness-lifestyle aesthetic',
-    outfit: 'matching sage green Alo Yoga sports bra and leggings set',
+  bedroom_loungewear: {
+    label: 'Bedroom mirror loungewear',
+    scene: 'facing the mirror directly for a selfie, sitting on the edge of a plush unmade hotel bed, holding phone naturally, glowing natural skin, messy high bun, aspirational intimate lifestyle aesthetic',
+    outfit: 'luxurious matching silk camisole and shorts loungewear set in rich burgundy, barefoot, delicate gold anklet',
   },
 
   // === ASPIRATIONAL CASUAL (5) ===
-  bandra_sunday_coffee: {
-    label: 'Sunday Bandra apartment coffee',
-    scene: 'Sunday morning in her minimalist Bandra apartment, sitting on a plush cream sofa with legs tucked in, holding a ceramic mug of black coffee, looking out the window, slice-of-life cozy moment',
-    outfit: 'oversized grey sweatpants and tight white ribbed tank top, barefoot, no makeup, hair in a messy bun',
+  kitchen_morning_coffee: {
+    label: 'Kitchen morning coffee',
+    scene: `facing the camera directly with a warm intimate smile, leaning casually against a modern kitchen counter, holding a small ceramic bowl or mug with both hands (${HANDS_ANCHOR}), natural relaxed posture, an espresso machine and small herb plants visible behind, framed graduation photo on the wall, real apartment depth with city skyline through window`,
+    outfit: 'ribbed cream crop top with a cozy beige cardigan draped loosely off the shoulders, high-waisted fitted blue jeans, hair in a loose messy bun with flyaway strands',
   },
-  cafe_macbook_laugh: {
-    label: 'Indie coffee roastery candid',
-    scene: 'caught mid-laugh at chic indie coffee roastery, looking off-camera at someone, an open MacBook with code on the screen and a half-eaten croissant on the table, smart-approachable beauty, natural daylight from window',
-    outfit: 'vintage Levi 501 jeans, crisp white t-shirt, delicate gold layered necklaces, hair in a messy braid',
+  office_blazer_ipad: {
+    label: 'Office blazer with iPad',
+    scene: `facing the camera directly with a bright professional smile, standing in a bright modern office with floor-to-ceiling windows showing city skyline, holding an iPad and stylus naturally (${HANDS_ANCHOR}), confident and approachable corporate aesthetic`,
+    outfit: 'tailored deep teal blazer worn open over a fitted cream top, matching teal trousers, sleek low ponytail, delicate gold jewelry',
+  },
+  cafe_green_candid: {
+    label: 'Cafe candid in green',
+    scene: `facing the camera directly with a genuine sweet smile, sitting at a cafe table with a coffee and a plate of food, hands clasped together resting on the table (${HANDS_ANCHOR}), warm natural daylight, exposed brick wall and soft cafe lighting in background`,
+    outfit: 'sleeveless olive green top with subtle vertical stitching, hair pulled back softly with face-framing pieces, minimal elegant makeup',
   },
   european_street_trench: {
     label: 'European street walk',
-    scene: 'walking down a sun-dappled street in Lisbon or Paris, looking back over her shoulder at camera with a bright genuine smile, cobblestones and old-world facades behind, travel-influencer aesthetic',
-    outfit: 'beige trench coat over a black mini dress, knee-high leather boots, oversized sunglasses pushed back on head',
+    scene: 'facing the camera directly, walking down a sun-dappled street in Lisbon or Paris, confident strut, bright genuine smile, cobblestones and old-world facades behind, travel-influencer aesthetic',
+    outfit: 'open beige trench coat over a fitted black mini dress, knee-high leather boots, oversized sunglasses',
   },
   vanity_getting_ready: {
     label: 'Getting ready at vanity',
-    scene: 'sitting at a sleek modern vanity applying a subtle nude lipstick, looking into the mirror, plush white hotel robe slipped slightly off one shoulder, perfect glowing skin, soft diffused warm lighting',
-    outfit: 'plush white luxury hotel robe',
+    scene: `facing the camera directly (via mirror reflection), sitting at a sleek modern vanity applying a subtle nude lipstick (${HANDS_ANCHOR}), plush white hotel robe slipped slightly off one shoulder, perfect glowing skin, soft diffused warm lighting`,
+    outfit: 'plush white luxury hotel robe, revealing collarbones and shoulder',
   },
   vinyl_records_floor: {
     label: 'Vinyl records on the floor',
-    scene: 'sitting cross-legged on a patterned Persian rug surrounded by vintage vinyl records, adjusting the needle on a turntable, warm afternoon light through window, boho-chic cultured vibe',
-    outfit: 'oversized vintage band t-shirt tucked into denim shorts, no shoes, hair in a low loose bun',
+    scene: `facing the camera directly, sitting on a patterned Persian rug surrounded by vintage vinyl records, holding a record sleeve (${HANDS_ANCHOR}), warm afternoon light through window, boho-chic cultured vibe`,
+    outfit: 'fitted white ribbed tank top, distressed denim shorts, no shoes, hair in a low loose bun',
   },
 
   // === TRADITIONAL ELEGANCE (5) ===
-  diwali_party_saree: {
-    label: 'Diwali party midnight saree',
-    scene: 'attending a high-end Diwali celebration, looking directly at camera with elegant powerful gaze, soft glowing diyas blurred in background, Bollywood-actress-tier glamour, festive warm lighting',
-    outfit: 'breathtaking contemporary midnight-blue sequined saree, hair in sleek waves, heavy oxidized silver jhumka earrings, delicate bindi',
+  balcony_kurta_sunset: {
+    label: 'Balcony kurta at sunset',
+    scene: `facing the camera directly with a soft sweet smile, standing on a high-rise apartment balcony at golden hour sunset, hands resting gently clasped in front of her (${HANDS_ANCHOR}), surrounded by lush potted plants, city skyline in the soft background`,
+    outfit: 'elegant beige and pink block-printed cotton kurta set with 3/4 sleeves, hair pulled up in a neat bun, small bindi, very natural fresh-faced makeup',
   },
-  red_kanjeevaram: {
-    label: 'Festival red Kanjeevaram',
-    scene: 'close-up portrait during a traditional Indian festival, looking down slightly with a soft demure smile, deeply rooted cultural beauty, warm golden festival lighting',
-    outfit: 'heavy red Kanjeevaram silk saree, gold choker necklace, intricate gold jhumkas, small elegant bindi',
+  diwali_party_saree: {
+    label: 'Diwali party red saree',
+    scene: `facing the camera directly with a radiant joyful smile, standing in a festive room decorated with warm string lights and diyas, other guests softly blurred in the background, hands resting naturally at her sides (${HANDS_ANCHOR}), vibrant cultural celebration`,
+    outfit: 'rich crimson red silk saree with heavy gold zari border, short-sleeved matching red blouse, delicate gold necklace and earrings, hair pulled back neatly, small red bindi',
   },
   udaipur_lehenga_twirl: {
     label: 'Udaipur palace lehenga twirl',
-    scene: 'twirling joyfully in a heritage palace courtyard in Udaipur, sunlight catching the embroidery, vibrant celebratory motion blur, modern-Indian aesthetic',
-    outfit: 'pastel floral lehenga with intricate embroidery, traditional jewelry, hair half-up half-down with floral hair clip',
+    scene: 'facing the camera directly, standing in a heritage palace courtyard in Udaipur, hands resting on her hips, confident modern-Indian aesthetic, sunlight catching the embroidery',
+    outfit: 'vibrant magenta floral lehenga with a modern plunging neckline blouse, traditional jewelry, hair half-up half-down with floral hair clip',
   },
   vintage_ambassador_saree: {
     label: 'Vintage Ambassador car saree',
-    scene: 'sitting in a vintage white Ambassador car at sunset, oversized vintage sunglasses, looking out the open window with a soft confident smile, old-money Indian royalty aesthetic, deeply elegant and timeless',
-    outfit: 'crisp white linen saree with sleeveless blouse, vintage gold drop earrings, no excess accessories',
+    scene: 'facing the camera directly, sitting in the back of a vintage white Ambassador car with the door open, looking at the viewer with a soft confident smile, old-money Indian royalty aesthetic, deeply elegant and timeless',
+    outfit: 'crisp white linen saree with a halter-neck blouse, vintage gold drop earrings, no excess accessories',
   },
   festive_kurta_mirror: {
     label: 'Festive kurta mirror selfie',
-    scene: 'mirror selfie before heading out for a festival, adjusting a heavy gold earring, modern influencer format applied to traditional attire, warm golden hour light streaming through window',
+    scene: `facing the mirror directly for a selfie, adjusting a heavy gold earring with free hand (${HANDS_ANCHOR}), modern influencer format applied to traditional attire, warm golden hour light streaming through window`,
     outfit: 'heavy velvet kurta with intricate zari work in deep burgundy, traditional gold jewelry, hair in a low bun with maang tikka',
   },
 
   // === LUXURY LIFESTYLE (5) ===
   porsche_golden_hour: {
     label: 'Luxury SUV golden hour',
-    scene: 'sitting in the driver seat of a Porsche or Range Rover with beige leather interior, golden hour light hitting her face, looking forward with effortless wealth aura, hand resting on the leather steering wheel',
-    outfit: 'crisp white linen shirt unbuttoned at the collar, delicate gold layered necklaces, designer aviator sunglasses on the head',
+    scene: `facing the camera directly, sitting in the driver seat of a Porsche with beige leather interior, door open, looking at viewer with effortless wealth aura, one hand resting on the leather steering wheel (${HANDS_ANCHOR})`,
+    outfit: 'crisp white linen shirt unbuttoned deeply at the collar, delicate gold layered necklaces, designer aviator sunglasses on the head',
   },
   business_class_champagne: {
     label: 'Business class flight',
-    scene: 'relaxing in a lie-flat Business Class airplane seat on an international flight, holding a glass of champagne, looking out the window at clouds, jet-setter aspiration, soft cabin lighting',
-    outfit: 'matching camel-colored cashmere lounge set, comfortable but extremely expensive looking',
+    scene: `facing the camera directly, relaxing in a lie-flat Business Class airplane seat on an international flight, holding a glass of champagne (${HANDS_ANCHOR}), jet-setter aspiration, soft cabin lighting`,
+    outfit: 'matching camel-colored cashmere lounge set, comfortable but extremely expensive looking, revealing collarbones',
   },
   omakase_solo: {
     label: 'Solo omakase fine dining',
-    scene: 'solo fine-dining at an omakase restaurant counter, beautifully plated sushi and a glass of red wine on the wooden bar in front, looking at camera with a sophisticated knowing smile, warm restaurant lighting',
+    scene: `facing the camera directly, solo fine-dining at an omakase restaurant counter, holding a pair of chopsticks over beautifully plated sushi (${HANDS_ANCHOR}), sophisticated knowing smile, warm restaurant lighting`,
     outfit: 'sleek black halter-neck dress, minimalist gold cuff bracelet, hair in a sleek low ponytail',
   },
   art_gallery_blazer: {
     label: 'Contemporary art gallery',
-    scene: 'exploring a contemporary art gallery, hands in pockets, looking thoughtfully at a large abstract painting, intellectual-wealthy-cultured aura, soft museum lighting',
-    outfit: 'tailored oversized beige suit with a white silk camisole underneath, sleek black loafers, hair in loose waves',
+    scene: 'facing the camera directly, exploring a contemporary art gallery, looking at the viewer with an intellectual-wealthy-cultured aura, soft museum lighting, large abstract painting behind her',
+    outfit: 'tailored oversized beige suit worn open with a black silk camisole underneath, sleek black loafers, hair in loose waves',
   },
   yacht_white_linen: {
     label: 'Private yacht golden hour',
-    scene: 'golden hour on a private yacht, holding a woven sun hat in one hand, dress and hair flowing in the wind, the ultimate expression of freedom and success, ocean horizon behind',
-    outfit: 'flowing white linen maxi dress with a low V-back, barefoot, gold ankle bracelet',
+    scene: `facing the camera directly, golden hour on a private yacht, holding a woven sun hat in one hand (${HANDS_ANCHOR}), dress and hair flowing in the wind, the ultimate expression of freedom and success, ocean horizon behind`,
+    outfit: 'flowing white linen maxi dress with a deep V-neck, barefoot, gold ankle bracelet',
   },
 };
 
@@ -167,19 +187,14 @@ function pickSceneForToday() {
   return keys[week % keys.length];
 }
 
-// The base prefix enforces the photographic style and the strict "NOT cgi" guardrails
-// Tuned for Samiikssha-tier realism: specific lens, film stock, lighting anchors.
-const STYLE_ANCHOR = `Photographic style: shot on iPhone 15 Pro Max main camera, 24mm lens, photorealistic ultra-detailed natural skin texture, visible pores, natural subtle makeup, cinematic depth of field, casual Instagram influencer aesthetic, candid documentary feel, highly engaging, highly attractive and desirable but classy, natural slice-of-life moment, soft ambient lighting, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, no plastic skin.`;
-
-// Tasteful body descriptor: visibly hourglass figure with fuller hips and
-// defined waist that reads as natural and aspirational, not exaggerated/fake.
-// Applied ONLY to lure photos (Friday) and lifestyle videos (Sat-Sun).
-// Tech reels stay head-and-shoulders unchanged.
-const CURVY_BODY = 'tasteful hourglass figure, gently fuller hips, defined waist, naturally proportioned bust, soft feminine silhouette, natural body curves, never exaggerated, never artificial';
+// The base prefix enforces the photographic style and the strict "NOT cgi" guardrails.
+// Tuned for Samiikssha-tier realism: real iPhone capture aesthetic with grain + imperfections.
+const STYLE_ANCHOR = `Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, natural ambient mixed lighting (warm/cool blend), real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`;
 
 function buildPrompt(sceneKey, persona, trigger) {
   const scene = SCENES[sceneKey];
   return [
+    OUTCOME_SPEC,
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
@@ -207,7 +222,7 @@ function buildPromptFromConcept(concept, trigger) {
   if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
     prompt += ` ${STYLE_ANCHOR}`;
   }
-  return prompt;
+  return `${OUTCOME_SPEC} ${prompt}`;
 }
 
 async function renderLurePhoto({ persona, sceneKey, calendarId }) {

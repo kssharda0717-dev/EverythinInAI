@@ -192,13 +192,13 @@ function pickMood(forceKey) {
 function buildHeroPrompt(mood, trigger) {
   // If the LLM-generated keyframe prompt already includes the trigger, use it directly.
   if (mood.keyframe_prompt && mood.keyframe_prompt.includes(trigger)) {
-    return mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '') + ' Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.';
+    return mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '') + ' Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.';
   }
   return [
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
     mood.keyframe_prompt + '.',
     mood.outfit ? `Wearing: ${mood.outfit}.` : '',
-    `Photographic style: cinematic action photograph, shot on Sony A7R IV with 50mm prime at f/2.0, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, highly attractive and aspirational, lifestyle Instagram aesthetic, NOT illustration, NOT cartoon, NOT cgi.`,
+    `Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`,
   ].filter(Boolean).join(' ');
 }
 
@@ -288,7 +288,7 @@ async function main() {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `dance-${runId.slice(0, 14)}-`));
 
     // Step 1: hero image — Rhea in dance pose, mid-move
-    const danceHeroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic full-body stance showing her hourglass silhouette in motion, confident gaze at the camera. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion. Photographic style: cinematic action photograph, shot on Sony A7R IV, photorealistic ultra-detailed natural skin texture, dynamic engaging composition, high-fashion editorial quality, NOT illustration, NOT cartoon, NOT cgi.`;
+    const danceHeroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic full-body stance showing her hourglass silhouette in motion, confident gaze at the camera. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion. Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`;
     const heroSeed = Math.floor(Math.random() * 1_000_000);
     log.info(`[1/3] Rendering dance hero image (Flux+LoRA)...`);
     const heroResult = await runModel('flux_dev_lora', {
