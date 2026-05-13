@@ -122,21 +122,27 @@ async function pickAestheticContext() {
 /**
  * Decide the lure level for the next Reel based on weekly quota.
  * Returns 1-4 (Avi's max is 4).
+ *
+ * @param {number} recentLureCount - high-lure (>=3) reels posted in the last 7 days
+ * @param {string} streamType - 'tech' | 'lure' | 'lifestyle'.
+ *   Tech reels ENFORCE a minimum of 2 (lure-1 hooks read as boring on a news reel).
+ *   Lure / lifestyle streams can dip to 1 when weekly quota is hit.
  */
-async function chooseLureLevel(recentLureCount = 0) {
+async function chooseLureLevel(recentLureCount = 0, streamType = 'tech') {
   const persona = await getActivePersona();
   const quota = persona.weekly_lure_quota || 2;
+  const floor = streamType === 'tech' ? 2 : 1;
 
   if (recentLureCount >= quota) {
-    // Quota maxed → educational only
-    return Math.floor(Math.random() * 2) + 1;  // 1 or 2
+    // Quota maxed → educational only, but respect the per-stream floor
+    return Math.max(floor, Math.floor(Math.random() * 2) + 1);
   }
 
-  // 30% chance of lure-coded, 70% educational
+  // 30% chance of lure-coded (3-4), 70% educational (floor..2)
   if (Math.random() < 0.3) {
-    return Math.min(persona.max_lure_level, 3 + Math.floor(Math.random() * 2));  // 3 or 4
+    return Math.min(persona.max_lure_level, 3 + Math.floor(Math.random() * 2));
   }
-  return 2;
+  return Math.max(floor, 2);
 }
 
 function clearCache() {

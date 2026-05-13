@@ -30,13 +30,18 @@ const log = createLogger('hero_worker');
 // Each option is a complete outfit string used in the prompt.
 // NO NECKLACES — the LoRA tends to merge necklaces into skin/clothing, looking weird.
 // Just the outfit + ear accents only.
+// Outfits engineered for talking-head lipsync safety:
+// - Clean lower necklines (round / V-neck / scoop / camisole strap) so there's a clean
+//   separation between fabric and the neck. Turtlenecks/chokers/high collars FOLD and DISTORT
+//   when Pruna or Wan move the head during lipsync (creates the 'floating cloth' artifact).
+// - Small stud earrings only; no necklaces (they move with talking and look unnatural).
 const OUTFITS = {
-  cream_knit:   'fitted cream ribbed knit turtleneck, modest high crew neck, no necklace, simple small gold stud earrings',
-  forest_green: 'fitted forest green ribbed knit turtleneck, modest high crew neck, no necklace, no jewelry',
-  beige_blazer: 'tailored beige blazer over high-neck cream silk top, no necklace, simple small gold stud earrings, professional polished look',
-  ivory_silk:   'fitted ivory silk blouse buttoned to high neck, no necklace, no jewelry, clean minimalist',
-  oversized_cardigan: 'oversized cream knit cardigan over fitted cream high-neck top, no necklace, simple small gold hoop earrings',
-  black_mock:   'fitted black mock-neck merino top, no necklace, no jewelry, minimalist',
+  cream_round_tee:   'fitted cream cotton round-neck t-shirt, clean wide neckline well below collarbones, no necklace, simple small gold stud earrings, minimalist editorial',
+  black_vneck:       'fitted black soft cotton v-neck top, clean wide v-neckline, no necklace, no jewelry, minimalist',
+  beige_blazer_open: 'tailored beige blazer worn open over fitted plain white cotton tank, clean low scoop neckline, no necklace, simple small gold studs, professional editorial',
+  ivory_silk_open:   'flowy ivory silk blouse with first two buttons undone showing a clean open neckline, no necklace, no jewelry, soft editorial',
+  charcoal_scoop:    'fitted charcoal grey cotton scoop-neck tee, wide soft neckline, no necklace, small gold studs, clean editorial',
+  dusty_pink_cami:   'fitted dusty pink silk camisole with thin straps, clean shoulder line, no necklace, simple gold studs, soft feminine editorial',
 };
 
 function parseArgs(argv) {

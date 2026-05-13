@@ -342,6 +342,19 @@ async function draftConcepts(signal, lureLevel = 2, streamType = 'tech', retries
       const estOutputTokens = Math.ceil(rawText.length / 4);
       log.info(`✓ Drafted ${parsed.concepts.length} concepts (~${estOutputTokens} output tokens)`);
 
+      // ===== HARD-FIX: deterministic full_script assembly =====
+      // The LLM sometimes drops the CTA from full_script even when cta field exists.
+      // We rebuild full_script in code so TTS ALWAYS speaks the CTA.
+      for (const c of parsed.concepts) {
+        if (streamType === 'tech' && c.hook && c.body_script && c.punchline) {
+          const parts = [c.hook, c.body_script, c.punchline];
+          if (c.cta && typeof c.cta === 'string' && c.cta.trim()) {
+            parts.push(c.cta);
+          }
+          c.full_script = parts.join(' ').replace(/\s+/g, ' ').trim();
+        }
+      }
+
       return {
         concepts: parsed.concepts,
         meta: {

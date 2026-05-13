@@ -91,7 +91,7 @@ async function main() {
   } else {
     const recentLure = await getRecentLureCount(persona.id);
     log.info(`Recent lure≥3 count in last 7 days: ${recentLure} / quota ${persona.weekly_lure_quota}`);
-    lureLevel = await personaService.chooseLureLevel(recentLure);
+    lureLevel = await personaService.chooseLureLevel(recentLure, streamType);
     log.info(`Lure level for today: ${lureLevel}`);
   }
 
