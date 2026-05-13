@@ -86,14 +86,14 @@ async function getConcept(db, args) {
 }
 
 const SETTINGS = {
-  bandra_apartment: 'clean simple out-of-focus warm-toned luxury apartment interior, soft plain wall with subtle warm gradient, gentle bokeh, Mumbai skyline faintly visible through a distant window',
-  glass_office:     'blurred background of a high-end corporate glass office at dusk, sleek modern architecture, subtle cool blue and warm amber lighting reflections, professional Goldman Sachs vibe',
-  luxury_rooftop:   'out-of-focus luxury rooftop lounge at golden hour, warm sunset lighting, subtle bokeh of string lights and distant city buildings, high-end aspirational vibe',
-  art_gallery:      'blurred background of a modern minimalist art gallery, stark white walls with soft gallery spotlights, sophisticated intellectual aesthetic',
-  luxe_car:         'out-of-focus interior of a luxury car, subtle premium leather textures and warm ambient dashboard lighting, high-status lifestyle vibe',
-  hotel_suite:      'blurred background of a premium 5-star hotel suite, floor-to-ceiling windows with soft daylight, luxurious beige and cream tones, aspirational wealth',
-  cafe_window:      'blurred background of a quiet minimalist upscale cafe, soft natural daylight coming from a window off-camera, warm chic aesthetic',
-  library_nook:     'soft out-of-focus background of rich wooden bookshelves with warm ambient lighting, cozy but highly intellectual vibe',
+  bandra_apartment: 'clean simple out-of-focus warm-toned luxury apartment interior, soft plain wall with subtle warm gradient, gentle bokeh, Mumbai skyline faintly visible through a distant window, real-world depth with soft ambient lighting',
+  glass_office:     'blurred background of a high-end corporate glass office at dusk, sleek modern architecture, subtle cool blue and warm amber lighting reflections, professional Goldman Sachs vibe, cinematic depth of field',
+  luxury_rooftop:   'out-of-focus luxury rooftop lounge at golden hour, warm sunset lighting, subtle bokeh of string lights and distant city buildings, high-end aspirational vibe, rich contrasting shadows',
+  art_gallery:      'blurred background of a modern minimalist art gallery, stark white walls with soft gallery spotlights, sophisticated intellectual aesthetic, clean natural lighting',
+  luxe_car:         'out-of-focus interior of a luxury car, subtle premium leather textures and warm ambient dashboard lighting, high-status lifestyle vibe, rich dark tones',
+  hotel_suite:      'blurred background of a premium 5-star hotel suite, floor-to-ceiling windows with soft daylight, luxurious beige and cream tones, aspirational wealth, soft diffused sunlight',
+  cafe_window:      'blurred background of a quiet minimalist upscale cafe, soft natural daylight coming from a window off-camera, warm chic aesthetic, subtle clutter like a coffee cup or plant out of focus',
+  library_nook:     'soft out-of-focus background of rich wooden bookshelves with warm ambient lighting, cozy but highly intellectual vibe, deep rich wood tones and soft shadows',
 };
 
 const POSES = {
@@ -105,7 +105,28 @@ const POSES = {
   mid_laugh:        'Captured mid-laugh with a bright genuine smile, eyes sparkling with fun, highly charismatic and open energy.',
 };
 
-function pickCombo(forceOutfitKey, conceptId) {
+async function pickCombo(forceOutfitKey, conceptId, db) {
+  // Fetch recent keyframes to avoid repeating outfit/setting/pose
+  const { data: recentKeyframes } = await db.from('reel_keyframes')
+    .select('outfit_key, prompt')
+    .order('created_at', { ascending: false })
+    .limit(3);
+
+  const recentOutfits = new Set((recentKeyframes || []).map(kf => kf.outfit_key).filter(Boolean));
+  
+  // Extract recent settings and poses from prompts (a bit hacky but works for avoiding immediate repeats)
+  const recentSettings = new Set();
+  const recentPoses = new Set();
+  (recentKeyframes || []).forEach(kf => {
+    if (!kf.prompt) return;
+    Object.keys(SETTINGS).forEach(key => {
+      if (kf.prompt.includes(SETTINGS[key])) recentSettings.add(key);
+    });
+    Object.keys(POSES).forEach(key => {
+      if (kf.prompt.includes(POSES[key])) recentPoses.add(key);
+    });
+  });
+
   // Use a better hash to avoid clustering
   let hash = 0;
   for (let i = 0; i < conceptId.length; i++) {
@@ -115,14 +136,42 @@ function pickCombo(forceOutfitKey, conceptId) {
   hash = Math.abs(hash);
 
   const outfitKeys = Object.keys(OUTFITS);
-  const outfitKey = forceOutfitKey && OUTFITS[forceOutfitKey] ? forceOutfitKey : outfitKeys[hash % outfitKeys.length];
+  let outfitKey = forceOutfitKey && OUTFITS[forceOutfitKey] ? forceOutfitKey : outfitKeys[hash % outfitKeys.length];
+  
+  // If we randomly picked a recently used outfit, find the next available one
+  if (!forceOutfitKey && recentOutfits.has(outfitKey)) {
+    for (let i = 1; i < outfitKeys.length; i++) {
+      const candidate = outfitKeys[(hash + i) % outfitKeys.length];
+      if (!recentOutfits.has(candidate)) {
+        outfitKey = candidate;
+        break;
+      }
+    }
+  }
 
   const settingKeys = Object.keys(SETTINGS);
-  // Use coprime multipliers to ensure even distribution across the 576-combo space
-  const settingKey = settingKeys[(hash * 7) % settingKeys.length];
+  let settingKey = settingKeys[(hash * 7) % settingKeys.length];
+  if (recentSettings.has(settingKey)) {
+    for (let i = 1; i < settingKeys.length; i++) {
+      const candidate = settingKeys[(hash * 7 + i) % settingKeys.length];
+      if (!recentSettings.has(candidate)) {
+        settingKey = candidate;
+        break;
+      }
+    }
+  }
 
   const poseKeys = Object.keys(POSES);
-  const poseKey = poseKeys[(hash * 13) % poseKeys.length];
+  let poseKey = poseKeys[(hash * 13) % poseKeys.length];
+  if (recentPoses.has(poseKey)) {
+    for (let i = 1; i < poseKeys.length; i++) {
+      const candidate = poseKeys[(hash * 13 + i) % poseKeys.length];
+      if (!recentPoses.has(candidate)) {
+        poseKey = candidate;
+        break;
+      }
+    }
+  }
 
   return {
     outfit:  { key: outfitKey,  value: OUTFITS[outfitKey]  },
@@ -209,7 +258,7 @@ async function main() {
     process.exit(1);
   }
 
-  const combo = pickCombo(args.outfit, concept.id);
+  const combo = await pickCombo(args.outfit, concept.id, db);
   log.info(`Combo locked for this Reel: outfit=${combo.outfit.key}, setting=${combo.setting.key}, pose=${combo.pose.key}`);
 
   await db.from('reel_concepts').update({
