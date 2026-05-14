@@ -302,6 +302,95 @@ async function main() {
     calendarRow = cal;
   }
 
+  // ===== INSPIRE MODE BRANCH =====
+  // weekend_mode='inspire' + inspire_analysis_json + inspire_audio_url means
+  // the user forwarded a reference reel via /inspire. We render Rhea's own
+  // version of the same vibe (Flux hero from Gemini's keyframe_prompt, Kling
+  // motion from Gemini's motion_prompt, then Pruna lipsync to the ORIGINAL
+  // audio so the song/voice matches the source reel).
+  if (calendarRow && calendarRow.weekend_mode === 'inspire' && calendarRow.inspire_analysis_json && calendarRow.inspire_audio_url) {
+    const analysis = calendarRow.inspire_analysis_json;
+    log.info(`✨ INSPIRE MODE — source: ${calendarRow.inspire_source_label || 'unknown'}, mood: ${analysis.music_mood || '?'}`);
+    const runId = `inspire-${Date.now()}`;
+    const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `inspire-${runId.slice(0, 14)}-`));
+
+    // Step 1: hero image — use Gemini's keyframe_prompt (already canonical-anchored).
+    const heroPrompt = analysis.keyframe_prompt;
+    log.info(`[1/4] Rendering inspire hero image (Flux+LoRA)...`);
+    const heroSeed = Math.floor(Math.random() * 1_000_000);
+    const heroResult = await runModel('flux_dev_lora', {
+      prompt: heroPrompt,
+      lora_weights: persona.active_lora_url,
+      lora_scale: 1.0,
+      aspect_ratio: '9:16',
+      num_outputs: 1,
+      num_inference_steps: 50,
+      guidance: 3.5,
+      output_format: 'webp',
+      output_quality: 100,
+      go_fast: false,
+      seed: heroSeed,
+    }, { timeoutMs: 240_000 });
+    const heroRemoteUrl = heroResult.output[0];
+    const heroDestPath = `lifestyle/${runId}/hero-${Date.now()}.webp`;
+    const heroHosted = await rehostImage(heroRemoteUrl, heroDestPath);
+    log.info(`  ✓ Hero: ${heroHosted.publicUrl}`);
+
+    // Step 2: Kling motion — animates the hero image with Gemini's motion_prompt.
+    log.info(`[2/4] Animating with Kling v1.6 (~2-3 min)...`);
+    const klingResult = await runModel('kling_v1_6_std', {
+      prompt: analysis.motion_prompt,
+      start_image: heroHosted.publicUrl,
+      duration: KLING_DURATION,
+      aspect_ratio: '9:16',
+      cfg_scale: 0.5,
+      negative_prompt: 'distorted face, deformed body, multiple people, extra limbs, blurry, low quality',
+    }, { timeoutMs: 600_000 });
+    const klingRemoteUrl = Array.isArray(klingResult.output) ? klingResult.output[0] : klingResult.output;
+    log.info(`  ✓ Kling video: ${klingRemoteUrl}`);
+
+    // Step 3: Pruna lipsync — sync Rhea's mouth/movements to the ORIGINAL audio.
+    // Pruna takes an image, not a video, so we use the hero frame again. The
+    // mouth motion will be synced to the inspire_audio_url; Kling motion was
+    // generated as a fallback/preview but for inspire mode we prioritise the
+    // lipsync output as the final.
+    log.info(`[3/4] Pruna lip-sync to source audio (~3-5 min)...`);
+    const pruna = await runModel('pruna_avatar', {
+      image: heroHosted.publicUrl,
+      audio: calendarRow.inspire_audio_url,
+      resolution: '720p',
+    }, { timeoutMs: 600_000 });
+    const prunaVideoUrl = Array.isArray(pruna.output) ? pruna.output[0] : pruna.output;
+    log.info(`  ✓ Pruna lipsync: ${prunaVideoUrl}`);
+
+    // Step 4: download Pruna output (already has audio embedded) and upload
+    log.info(`[4/4] Downloading + uploading final mp4...`);
+    const finalLocalPath = path.join(workDir, 'final.mp4');
+    await downloadFile(prunaVideoUrl, finalLocalPath);
+    const hosted = await uploadFinal(finalLocalPath, runId);
+
+    const totalCost = heroResult.cost_usd + klingResult.cost_usd + pruna.cost_usd;
+    log.info(`═`.repeat(46));
+    log.info(`✨ Inspire Reel ready.`);
+    log.info(`   url       : ${hosted.publicUrl}`);
+    log.info(`   source    : ${calendarRow.inspire_source_label || '?'}`);
+    log.info(`   mood      : ${analysis.music_mood || '?'}`);
+    log.info(`   size      : ${(hosted.sizeBytes / 1024 / 1024).toFixed(2)} MB`);
+    log.info(`   cost      : ~$${totalCost.toFixed(3)} (~₹${(totalCost * 84).toFixed(0)})`);
+    log.info(`═`.repeat(46));
+
+    await db.from('content_calendar').update({
+      output_url: hosted.publicUrl,
+      caption: analysis.caption || null,
+      hashtags: Array.isArray(analysis.hashtags) ? analysis.hashtags.join(' ') : null,
+      state: 'done',
+      completed_at: new Date().toISOString(),
+      cost_usd: totalCost,
+      updated_at: new Date().toISOString(),
+    }).eq('id', calendarRow.id);
+    return;
+  }
+
   // ===== DANCE MODE BRANCH =====
   // If calendar row has weekend_mode='dance' and dance_audio_url is set,
   // we render a lip-synced dance reel via Pruna instead of the standard Kling flow.

@@ -304,6 +304,8 @@ async function poll() {
         await handleHome(chatId);
       } else if (text === '/dance' || text.startsWith('/dance ')) {
         await handleDance(chatId);
+      } else if (text === '/inspire' || text.startsWith('/inspire ')) {
+        await handleInspire(chatId);
       } else if (text.startsWith('/weekly_stats')) {
         await handleWeeklyStats(chatId, text);
       } else if (text.startsWith('/stats_') || text.startsWith('/stats ')) {
@@ -1052,6 +1054,51 @@ async function handleHome(chatId) {
 }
 
 // =============================================================================
+// /inspire  — set both Sat & Sun reels to be RHEA-VERSIONS of a forwarded reel
+// (vision-LLM analyzes a reference reel → Rhea renders own version with same vibe + same audio)
+async function handleInspire(chatId) {
+  const db = dbModule.getClient();
+  const { sat, sun } = nextWeekendDates();
+
+  // Mark both calendar rows as inspire mode (refs filled later)
+  for (const date of [sat, sun]) {
+    await db.from('content_calendar')
+      .upsert({
+        target_date: date,
+        weekday: new Date(date).getDay(),
+        content_type: 'lifestyle_reel',
+        weekend_mode: 'inspire',
+        inspire_video_url: null,
+        inspire_audio_url: null,
+        inspire_analysis_json: null,
+        inspire_source_label: null,
+        state: 'pending',
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'target_date,content_type' });
+  }
+
+  // Wipe any prior pending uploads from this chat
+  await db.from('pending_audio_uploads')
+    .update({ status: 'cancelled' })
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting');
+
+  // Create two pending upload rows: Sat first, then Sun. We reuse the
+  // pending_audio_uploads table but flag weekend_mode='inspire' so the
+  // forwarded-video handler routes to the inspire path.
+  await db.from('pending_audio_uploads').insert([
+    { chat_id: chatId, for_date: sat, weekend_mode: 'inspire', status: 'awaiting' },
+    { chat_id: chatId, for_date: sun, weekend_mode: 'inspire', status: 'awaiting' },
+  ]);
+
+  await reply(chatId,
+    `✨ *Inspire mode locked in.*\n\n` +
+    `Forward me TWO reference reels (one for each day). I'll analyze each one and have Rhea render her own version of the same vibe with the same audio.\n\n` +
+    `*Step 1 of 2:* Forward (or paste an Instagram URL for) the reel you want for *Saturday's* (${sat}) post.\n\n` +
+    `_To forward an audio: open Instagram → Reel → Share icon → Telegram → Rhea Bot. Or paste any IG reel URL._`
+  );
+}
+
 // /dance  — set both Sat & Sun reels to be lip-synced dance reels
 // User must then forward TWO audio files (one for Sat, one for Sun)
 // =============================================================================
@@ -1111,9 +1158,15 @@ async function handleForwardedAudio(chatId, msg) {
   if (!pending) {
     await reply(chatId,
       `ℹ️ I received an audio/video, but I'm not waiting for one right now.\n\n` +
-      `If you want to use this for a dance reel, type /dance first.`
+      `If you want to use this for a dance reel, type /dance first.\n` +
+      `If you want Rhea to render her own version of a reel, type /inspire first.`
     );
     return;
+  }
+
+  // Route to inspire path if this pending row is inspire mode
+  if (pending.weekend_mode === 'inspire') {
+    return handleForwardedInspireVideo(chatId, msg, pending);
   }
 
   // Get file_id from the message (audio, video, voice, or video_note)
@@ -1238,9 +1291,14 @@ async function handleInstagramUrlAudio(chatId, url) {
   if (!pending) {
     await reply(chatId,
       `ℹ️ I see an Instagram URL, but I'm not waiting for an audio right now.\n\n` +
-      `Type /dance first if you want to use this for the next weekend's dance reels.`
+      `Type /dance first if you want to use this for the next weekend's dance reels, or /inspire to have Rhea render her own version.`
     );
     return;
+  }
+
+  // Route to inspire path if this pending row is inspire mode
+  if (pending.weekend_mode === 'inspire') {
+    return handleInstagramUrlInspire(chatId, url, pending);
   }
 
   await reply(chatId, `⬇️ Downloading audio from Instagram… (this can take ~30s if Meta is slow)`);
@@ -1328,6 +1386,201 @@ async function handleInstagramUrlAudio(chatId, url) {
       `✅ *Both audios locked in.*\n\n` +
       `Renders fire automatically Sat 8 AM and Sun 8 AM IST.`
     );
+  }
+}
+
+// =============================================================================
+// INSPIRE MODE HANDLERS
+// =============================================================================
+
+/**
+ * Shared: take a local mp4 file path, run the full inspire pipeline:
+ *   1. Upload original mp4 to Supabase (so the worker can reference it)
+ *   2. Extract audio with ffmpeg, upload to Supabase
+ *   3. Call inspire_analyzer (Gemini Vision) to get the Rhea brief
+ *   4. Persist video_url + audio_url + analysis JSON onto the calendar row
+ *   5. Mark pending row resolved, prompt user for next pending or end
+ */
+async function processInspireSource(chatId, pending, localMp4Path, sourceLabel) {
+  const db = dbModule.getClient();
+  const fs = require('fs');
+  const path = require('path');
+  const { spawnSync } = require('child_process');
+
+  await reply(chatId, `🧐 Analyzing the reference reel… (Gemini Vision can take ~60s)`);
+
+  const stem = path.basename(localMp4Path, path.extname(localMp4Path));
+  const tmpMp3 = path.join('/tmp', `${stem}.mp3`);
+
+  // 2. Extract audio
+  const ff = spawnSync('ffmpeg', ['-y', '-i', localMp4Path, '-vn', '-acodec', 'libmp3lame', '-q:a', '4', tmpMp3], { stdio: 'pipe' });
+  if (ff.status !== 0 || !fs.existsSync(tmpMp3)) {
+    await reply(chatId, `❌ ffmpeg audio extraction failed.`);
+    return;
+  }
+
+  // 1+2. Upload BOTH the original mp4 and the extracted mp3 to Supabase
+  const tsBase = Date.now();
+  const videoStoragePath = `inspire-source/${pending.for_date}/${tsBase}.mp4`;
+  const audioStoragePath = `inspire-source/${pending.for_date}/${tsBase}.mp3`;
+
+  const videoBuf = fs.readFileSync(localMp4Path);
+  const { error: vupErr } = await db.storage.from('avi-images')
+    .upload(videoStoragePath, videoBuf, { contentType: 'video/mp4', upsert: true, cacheControl: '31536000' });
+  if (vupErr) {
+    await reply(chatId, `❌ Supabase video upload failed: ${vupErr.message}`);
+    return;
+  }
+
+  const audioBuf = fs.readFileSync(tmpMp3);
+  const { error: aupErr } = await db.storage.from('avi-images')
+    .upload(audioStoragePath, audioBuf, { contentType: 'audio/mpeg', upsert: true, cacheControl: '31536000' });
+  if (aupErr) {
+    await reply(chatId, `❌ Supabase audio upload failed: ${aupErr.message}`);
+    return;
+  }
+
+  const { data: vpub } = db.storage.from('avi-images').getPublicUrl(videoStoragePath);
+  const { data: apub } = db.storage.from('avi-images').getPublicUrl(audioStoragePath);
+
+  // 3. Call the analyzer
+  let analysis = null;
+  try {
+    const { analyzeVideo } = require('../inspire/inspire_analyzer');
+    analysis = await analyzeVideo({ localVideoPath: localMp4Path });
+  } catch (e) {
+    log.error(`inspire_analyzer failed: ${e.message}`);
+    await reply(chatId, `❌ Vision analysis failed: ${e.message.slice(0, 300)}\n\nThe video and audio were saved, but I couldn't analyze the scene. Reply /inspire again to retry.`);
+    return;
+  } finally {
+    try { fs.unlinkSync(tmpMp3); } catch {}
+  }
+
+  // 4. Persist on calendar row
+  const { error: calErr } = await db.from('content_calendar').update({
+    inspire_video_url: vpub.publicUrl,
+    inspire_audio_url: apub.publicUrl,
+    inspire_analysis_json: analysis,
+    inspire_source_label: sourceLabel,
+    updated_at: new Date().toISOString(),
+  })
+    .eq('target_date', pending.for_date)
+    .eq('content_type', 'lifestyle_reel');
+  if (calErr) {
+    await reply(chatId, `❌ Calendar update failed: ${calErr.message}`);
+    return;
+  }
+
+  // 5. Mark pending row resolved
+  await db.from('pending_audio_uploads').update({
+    status: 'received',
+    audio_url: apub.publicUrl,
+    audio_filename: sourceLabel,
+    resolved_at: new Date().toISOString(),
+  }).eq('id', pending.id);
+
+  // 6. Reply with the analysis preview, prompt for next or end
+  const moodLabel = analysis.music_mood || '?';
+  const locLabel = (analysis.suggested_location || '').slice(0, 80);
+  const summaryLabel = (analysis.scene_summary || '').slice(0, 150);
+
+  await reply(chatId,
+    `✅ *Saved + analyzed for ${pending.for_date}*\n\n` +
+    `*Source:* \`${sourceLabel.slice(0, 40)}\`\n` +
+    `*Mood:* ${moodLabel}\n` +
+    `*Rhea will be:* ${locLabel}\n` +
+    `*Scene:* ${summaryLabel}\n`
+  );
+
+  // Are there more pending uploads?
+  const { data: nextPending } = await db.from('pending_audio_uploads')
+    .select('for_date')
+    .eq('chat_id', chatId)
+    .eq('status', 'awaiting')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (nextPending) {
+    const isSun = new Date(nextPending.for_date).getDay() === 0;
+    await reply(chatId,
+      `*Step 2 of 2:* Forward (or paste an IG URL for) the reel for *${isSun ? 'Sunday' : 'next day'}'s* (${nextPending.for_date}) inspire reel.`
+    );
+  } else {
+    await reply(chatId,
+      `✨ *Both inspire references locked in.*\n\n` +
+      `Renders fire automatically Sat 8 AM and Sun 8 AM IST. Estimated cost ~₹50 per reel.`
+    );
+  }
+}
+
+/**
+ * Forwarded video (Telegram) → inspire path.
+ */
+async function handleForwardedInspireVideo(chatId, msg, pending) {
+  const fs = require('fs');
+  const path = require('path');
+  const fileObj = msg.video || msg.video_note || msg.audio || msg.voice;
+  if (!fileObj || !fileObj.file_id) {
+    await reply(chatId, `❌ Could not extract video from forwarded message.`);
+    return;
+  }
+
+  // Download the file from Telegram
+  let filePath;
+  try {
+    const fileInfo = await axios.get(`${API}/getFile`, { params: { file_id: fileObj.file_id } });
+    filePath = fileInfo.data.result.file_path;
+  } catch (err) {
+    await reply(chatId, `❌ Telegram file lookup failed: ${err.message}`);
+    return;
+  }
+
+  const fileName = (fileObj.file_name || filePath.split('/').pop() || `inspire-${Date.now()}.mp4`).replace(/[^a-zA-Z0-9._-]/g, '_');
+  const downloadUrl = `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`;
+  const tmpIn = path.join('/tmp', `inspire-${Date.now()}-${fileName}`);
+
+  try {
+    const dl = await axios.get(downloadUrl, { responseType: 'arraybuffer', timeout: 120_000, maxContentLength: Infinity });
+    fs.writeFileSync(tmpIn, Buffer.from(dl.data));
+  } catch (err) {
+    await reply(chatId, `❌ Video download failed: ${err.message}`);
+    return;
+  }
+
+  try {
+    await processInspireSource(chatId, pending, tmpIn, fileName);
+  } finally {
+    try { fs.unlinkSync(tmpIn); } catch {}
+  }
+}
+
+/**
+ * Pasted Instagram URL → inspire path. yt-dlp → mp4 → processInspireSource.
+ */
+async function handleInstagramUrlInspire(chatId, url, pending) {
+  const fs = require('fs');
+  const path = require('path');
+  const { spawnSync } = require('child_process');
+
+  await reply(chatId, `⬇️ Downloading reference reel from Instagram (~30s)…`);
+
+  const tmpStem = path.join('/tmp', `inspire-ig-${Date.now()}`);
+  const tmpVid = `${tmpStem}.mp4`;
+  const dl = spawnSync('yt-dlp', ['-f', 'best', '-o', tmpVid, url], { encoding: 'utf8', timeout: 90_000 });
+  if (dl.status !== 0 || !fs.existsSync(tmpVid)) {
+    await reply(chatId,
+      `❌ yt-dlp could not download from this URL.\n\n` +
+      `_Fallback:_ open the Reel in Instagram → Share → Telegram → forward to me.`
+    );
+    log.warn(`yt-dlp failed: ${dl.stderr?.slice(0, 300) || 'no stderr'}`);
+    return;
+  }
+
+  try {
+    await processInspireSource(chatId, pending, tmpVid, url);
+  } finally {
+    try { fs.unlinkSync(tmpVid); } catch {}
   }
 }
 
