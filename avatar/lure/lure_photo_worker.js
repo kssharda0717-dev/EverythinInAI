@@ -33,8 +33,11 @@ const { rehostImage } = require('../imagery/storage');
 const {
   CANONICAL_LOOK,
   COMPLEXION_NEGATIONS,
-  DIGNITY_ANCHOR: SHARED_DIGNITY_ANCHOR,
+  LURE_DIGNITY_ANCHOR,
 } = require('../persona/canonical_look');
+// Lure variant: more permissive than tech (allure is the brief), but still
+// elegant. See canonical_look.js for the full register definition.
+const SHARED_DIGNITY_ANCHOR = LURE_DIGNITY_ANCHOR;
 
 const log = createLogger('lure_photo');
 

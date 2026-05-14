@@ -33,8 +33,11 @@ const { spawnSync } = require('child_process');
 const {
   CANONICAL_LOOK,
   COMPLEXION_NEGATIONS,
-  DIGNITY_ANCHOR: SHARED_DIGNITY_ANCHOR,
+  LIFESTYLE_DIGNITY_ANCHOR,
 } = require('../persona/canonical_look');
+// Lifestyle variant: athletic / activity-focused, body confidence framed
+// around action not posing. See canonical_look.js.
+const SHARED_DIGNITY_ANCHOR = LIFESTYLE_DIGNITY_ANCHOR;
 
 const log = createLogger('lifestyle');
 

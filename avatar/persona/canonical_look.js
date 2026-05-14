@@ -62,14 +62,45 @@ const COMPLEXION_NEGATIONS =
   'Skin tone must be fair-to-medium wheatish (hex around #A17B63), NOT tanned, NOT dusky, NOT bronzed, NOT sun-kissed dark, NOT deep brown, NOT South-Indian deep complexion. She is fair, the way a young Delhi-born indoor-working woman is fair.';
 
 // ============================================================================
-// DIGNITY_ANCHOR
+// DIGNITY_ANCHOR (default — used by tech reels)
 // IIT Mumbai grad / Goldman Sachs analyst energy. Smart hot, intellectual hot,
 // elegant hot — never trashy, never vulgar, never sexualized.
-// Used by ALL 3 streams. The lure/lifestyle workers can soften it slightly
-// for body-positive scenes but the core dignity must remain.
 // ============================================================================
 const DIGNITY_ANCHOR =
   'smart intellectual elegance, IIT-Mumbai-graduate energy, Goldman Sachs analyst poise, dignified professional presence, beautiful and magnetic but tasteful, NEVER vulgar, NEVER trashy, NEVER cheap, NEVER thirst-trap';
+
+// ============================================================================
+// LURE_DIGNITY_ANCHOR (Friday lure photos — more permissive than tech)
+//
+// Friday is the one day where allure is the entire brief. We want the photo
+// to be magnetic, desirable, scroll-stopping — but still elegant, not crude.
+// Reference register: Kiara Advani in a magazine cover, Tara Sutaria in a
+// resort editorial, Sonam Kapoor at Cannes. Sensual but never explicit.
+// What's allowed:
+//   - hint of decolletage, soft V, off-shoulder, backless, fitted silhouette
+//   - one-piece swimsuit at a pool, modest beachwear in beach scenes
+//   - traditional saree blouse with hint of midriff (festive, cultural context)
+//   - bedroom-loungewear in a luxury hotel room (silk slip, robe)
+// What is BANNED:
+//   - bralette/lingerie alone (always layered)
+//   - explicit nudity or near-nudity
+//   - any "come hither" / pornographic / overtly sexual pose
+//   - vulgar or crude framing
+//   - generic AI thirst-trap aesthetics (over-glossed plastic skin, bedroom
+//     close-up with no context, soft-porn pose)
+// ============================================================================
+const LURE_DIGNITY_ANCHOR =
+  'magnetic alluring desirable beautifully feminine energy (Kiara Advani / Tara Sutaria / Sonam Kapoor magazine-cover register), sensual but never explicit, hint of skin allowed within the scene context (decolletage, shoulder, midriff in saree, swimsuit at a pool, silk slip in a luxury hotel suite), the body is part of the lifestyle moment not the entire subject, IIT-Mumbai-grad-meets-magazine-cover quality, NEVER bralette or lingerie alone, NEVER explicit, NEVER "come hither" pornographic pose, NEVER crude, NEVER vulgar, NEVER generic AI thirst-trap, NEVER over-glossed plastic skin';
+
+// ============================================================================
+// LIFESTYLE_DIGNITY_ANCHOR (Sat-Sun lifestyle videos — athletic / dynamic)
+//
+// Lifestyle is about action and aspiration: gym, pilates, hiking, dancing,
+// luxury drives, infinity pools. Body-confident but the focus is on the
+// activity, not the body.
+// ============================================================================
+const LIFESTYLE_DIGNITY_ANCHOR =
+  'athletic confident magnetic energy, body-positive but the focus is on the ACTIVITY (gym, pilates, hiking, dancing, swimming, driving) not on the body, the body is incidental to the action, joyful and aspirational, NEVER posing for the camera, NEVER thirst-trap, NEVER crude';
 
 // ============================================================================
 // LIGHTING_NEUTRAL_DAYLIGHT
@@ -93,6 +124,8 @@ module.exports = {
   CANONICAL_LOOK,
   COMPLEXION_NEGATIONS,
   DIGNITY_ANCHOR,
+  LURE_DIGNITY_ANCHOR,
+  LIFESTYLE_DIGNITY_ANCHOR,
   LIGHTING_NEUTRAL_DAYLIGHT,
   LIGHTING_GOLDEN_SAFE,
 };

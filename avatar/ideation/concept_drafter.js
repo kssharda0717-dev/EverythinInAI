@@ -150,7 +150,12 @@ ${frameworksList}
   } else if (streamType === 'lure') {
     taskBlock = `
 TASK: Draft 3 distinct Lure Photo concepts for Friday.
-═══════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════
+
+REGISTER: Friday lure photos are MAGNETIC + ALLURING + DESIRABLE — the
+weekly hero post that drives non-subscriber discovery and follows.
+Reference quality: Kiara Advani magazine cover, Tara Sutaria resort editorial,
+Sonam Kapoor Cannes shoot. Sensual but never explicit, alluring but never crude.
 
 REQUIREMENTS:
 1. Choose 3 DIFFERENT frameworks from this active registry:
@@ -158,11 +163,21 @@ ${frameworksList}
 
 2. For each concept, return:
    - title: working title
-   - image_prompt: A highly detailed image generation prompt describing the scene, lighting, outfit, and vibe based on the framework. Must include "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator."
-   - caption: Instagram caption matching the vibe.
+   - image_prompt: A HIGHLY DETAILED image generation prompt. MUST start with EXACTLY this prefix:
+     "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator with fair north-Indian wheatish complexion (skin tone hex roughly #A17B63, NEVER tanned, NEVER bronze, NEVER dusky). Long dark brown softly wavy hair flowing loosely past her shoulders. Soft natural glam makeup with mauve-pink lips. Small gold hoop earrings."
+     Then add: scene + activity + a SPECIFIC named prop she is interacting with + outfit (with explicit neckline detail) + lighting (warm cinematic, NOT generic golden hour) + framing.
+   - caption: Instagram caption matching the vibe (max 150 chars, magnetic and slightly mysterious, NOT clickbait).
    - hashtags: array of 5-8 lifestyle/aesthetic hashtags.
    - angle: the slug of the framework used.
    - lure_level: ${lureLevel}.
+
+3. ELEGANCE & ALLURE GUARDRAILS (HARD):
+   - Direct soft eye contact with a warm closed smile is the PRIMARY pose default. Side-glance/cold-model pose is BANNED.
+   - The body is part of the lifestyle moment, not the entire subject.
+   - Hint of decolletage / shoulder / midriff (in saree) is allowed within scene context.
+   - BANNED: bralette alone, lingerie alone, "come hither" bedroom pose, exposed cleavage spillage, generic AI thirst-trap framing.
+   - The setting must be a REAL physical place with named props (book, espresso cup, diya, lehenga dupatta, art canvas) — NOT generic AI bokeh.
+   - Lighting must be cinematic and warm but NOT bronze her skin (key light stays neutral, warmth comes from a named lamp/window/diya).
 `;
     outputSchema = `{
   "concepts": [

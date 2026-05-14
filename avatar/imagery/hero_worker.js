@@ -63,12 +63,13 @@ const COMPLEXION_ANCHOR = CANONICAL_LOOK;
 const DIGNITY_ANCHOR = `${SHARED_DIGNITY_ANCHOR}, magnetic alluring beautifully feminine energy (Kiara Advani / Tara Sutaria magazine-cover quality), subtle hint of collarbone and the very top of decolletage is allowed and desired, tasteful suggestion of her natural feminine silhouette is allowed, BUT NEVER plunging V-neck spilling cleavage, NEVER bralette or spaghetti-strap cami visible, NEVER exposed midriff or underboob, NEVER bedroom thirst-trap framing, NEVER trashy, NEVER vulgar`;
 
 // ============================================================================
-// FRAMING ANCHOR — locks the camera crop for lipsync compatibility.
-// Allows hint of collarbone / very top of decolletage but cuts off well above
-// any cleavage. The frame ends at the upper chest, NOT mid-chest.
+// FRAMING ANCHOR — calibrated for magnetism without exposure.
+// Allows the upper sternum / hint of decolletage to show but cuts off well
+// above any cleavage spillage. Sweet spot between conservative-modesty and
+// thirst-trap.
 // ============================================================================
 const FRAMING_ANCHOR =
-  'head-and-upper-shoulders portrait centered on her face, frame top just above her hair, frame bottom at the upper chest just below the collarbone (the very top of the decolletage may be visible but the chest itself is NOT in frame), shoulders visible at the bottom edge, hands NOT in frame, arms NOT in frame, full chest NOT in frame, no cleavage visible, the neckline of her top is partially visible';
+  'head-and-upper-chest portrait centered on her face, frame top just above her hair, frame bottom at the upper sternum (a hint of decolletage and the upper chest is visible but no cleavage and no breast curve is in frame), shoulders visible at the bottom edge, hands NOT in frame, arms NOT in frame, no cleavage visible, no breast shape visible, the neckline of her top is clearly visible';
 
 // ============================================================================
 // OUTFITS — Tech-reel wardrobe (RECALIBRATED for subtle allure).
@@ -102,7 +103,7 @@ const OUTFITS = {
 
   // ===== Cool Tones — sharp x intelligent =====
   black_soft_v:
-    'fitted black soft cotton t-shirt with a soft modest V-neckline (the V stops at the top of the collarbone, well above any cleavage), shows a hint of decolletage tastefully, no necklace, small gold hoop earrings, magnetic minimalist editorial',
+    'fitted black soft cotton t-shirt with a soft tasteful V-neckline (the V stops at the upper sternum, showing collarbone and the upper triangle of decolletage but no cleavage and no breast curve), no necklace, small gold hoop earrings, magnetic minimalist editorial',
   charcoal_scoop:
     'fitted charcoal grey cotton scoop-neck tee with a soft wide neckline showing collarbones, body-skimming feminine fit, no necklace, small gold studs, magnetic clean editorial',
   navy_blazer_open_shell:
@@ -110,9 +111,9 @@ const OUTFITS = {
   slate_oxford_unbuttoned_top:
     'crisp slate-blue oxford shirt with the top two buttons undone showing the collarbone area but no chest, soft point collar, sleeves rolled to the forearm, no necklace, small gold studs, smart-casual magnetic editorial',
 
-  // ===== Bold Pop — magnetic colour, tasteful skin =====
+  // ===== Bold Pop — magnetic colour, tasteful skin (DEFAULT BUCKET FOR MAGNETISM) =====
   emerald_silk_soft_v:
-    'rich emerald green silk blouse with a soft modest V-neckline (the V stops just below the collarbone, well above the chest, no cleavage visible), delicate gold stud earrings, magnetic luxurious editorial',
+    'rich emerald green silk wrap-style blouse with a soft tasteful V-neckline (the V stops at the upper sternum, showing collarbone and a hint of decolletage but no cleavage), delicate gold stud earrings, magnetic luxurious Vogue-India-cover editorial (the Indian-festive emerald palette that signals depth)',
   burgundy_off_shoulder:
     'fitted deep burgundy fine-knit top worn off one shoulder showing her bare shoulder line elegantly, the other shoulder fully covered, no strap visible, no chest visible, magnetic bold editorial',
   mustard_scoop_ribbed:
@@ -285,16 +286,22 @@ function buildHeroPrompt(persona, combo, trigger) {
     DIGNITY_ANCHOR + '.',
     // 3. Framing (locks head-and-shoulders crop)
     FRAMING_ANCHOR + '.',
-    // 4. Expression
-    'Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging intelligent eyes.',
+    // 4. Expression — warm direct eye contact, parasocial closed smile.
+    //    The cold model side-glance kills warmth. We want "smart friend on a
+    //    podcast" energy: direct soft eye contact, genuine closed-mouth smile
+    //    that reaches the eyes, slight lean toward camera as if mid-conversation.
+    'Direct soft eye contact straight at the camera (not looking away, not side-glancing), eye-level shot, genuine warm closed-mouth smile that reaches the eyes (lips together, no teeth showing, the corners of her mouth lifted in a real smile not a cold pout), slight forward lean of head/shoulders toward the camera as if mid-conversation, magnetic intimate parasocial energy of a smart friend talking to YOU.',
     // 5. Pose
     combo.pose.value,
     // 6. Outfit (modest by definition — see OUTFITS dict)
     `Wearing ${combo.outfit.value}.`,
-    // 7. Setting (real-room, NOT generic AI bokeh)
+    // 7. Setting (real-room with named cozy props for layered depth)
     `Background: ${combo.setting.value}.`,
-    // 8. Lighting — imported from shared module. Soft, even, NOT golden-hour.
-    `Lighting: ${LIGHTING_NEUTRAL_DAYLIGHT}.`,
+    // 8. Lighting — cinematic three-point soft warm:
+    //    The cold flat outdoor noon light reads as "AI fashion shoot".
+    //    A real podcast-grade three-point warm setup reads as "smart friend
+    //    on her own couch" — which is the magnetic register your audience wants.
+    'Lighting: soft cinematic three-point setup — warm key light from a window off-camera left, gentle fill from a brass desk lamp off-camera right, subtle rim light separating her hair from the background; her face is evenly lit with a soft warm wrap-around glow (NOT harsh outdoor noon, NOT flat ring-light, NOT cold studio glow); the warmth comes from the LAMP not from bronzing the skin.',
     // 9. Photographic style + realism guardrails
     'Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth, NOT bronzed, NOT tanned, NOT sun-kissed dark.',
   ].join(' ');
