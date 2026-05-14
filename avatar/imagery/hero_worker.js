@@ -31,13 +31,40 @@ const { rehostImage } = require('./storage');
 const log = createLogger('hero_worker');
 
 // ============================================================================
-// COMPLEXION ANCHOR — applied to every tech-reel hero render.
-// Without this, Flux Dev biases toward bronze/dusky for "Indian content
-// creator" especially under "warm ambient" / "golden hour" lighting.
-// We need fair-to-medium warm wheatish — NOT tanned, NOT dark.
+// CANONICAL LOOK ANCHOR — Rhea's identity locked to the user's reference photo
+// (avatar/persona/references/canonical_rhea.webp).
+//
+// Empirical color analysis of the reference image (sampled across forehead,
+// cheeks, chin):
+//   AVG SKIN HEX = #A17B63   RGB = (161, 124,  99)   warm wheatish
+//
+// Empirical color of the LATEST drifted render (the one user rejected):
+//   AVG SKIN HEX = #7F4A30   RGB = (128,  74,  48)   deep bronze/dusky
+//
+// That's a -34% luminance drift. Flux Dev's "Indian content creator" prior
+// pulls hard toward bronze unless we anchor the look with concrete, named,
+// photographic features of the actual reference image.
+//
+// Below: every distinctive feature of canonical Rhea, named explicitly so
+// Flux has nothing to hallucinate.
 // ============================================================================
-const COMPLEXION_ANCHOR =
-  'fair-to-medium warm wheatish Indian complexion (light skin tone, NOT tanned, NOT dusky, NOT bronze, NOT sun-kissed dark), naturally light skin similar to a young North Indian woman who works indoors';
+const CANONICAL_LOOK = [
+  // Skin — hex-anchored, double-negated, north-Indian-specific
+  'fair north-Indian wheatish complexion (skin tone hex roughly #A17B63, soft warm beige with subtle pink undertone, light enough that her cheekbones catch warm highlights cleanly), the complexion of a young Delhi-born North-Indian woman who works indoors in air-conditioned offices, NEVER tanned, NEVER dusky, NEVER bronze, NEVER sun-kissed dark, NEVER deep brown',
+  // Hair — long, loose, wavy (NOT tight bun, NOT pulled back)
+  'long dark brown softly wavy hair flowing loosely down past her shoulders on both sides of her face with natural face-framing pieces, side part, NOT tied up, NOT in a bun, NOT slicked back, soft volume at the crown',
+  // Eyes / brows — defined but soft
+  'large warm dark brown almond-shaped eyes with soft lifted eyeliner and lightly defined natural brows, calm intelligent gaze',
+  // Makeup — soft glam, mauve-pink lip
+  'soft natural glam makeup: dewy skin finish (NOT matte, NOT plastic), subtle peach blush on cheekbones, soft mauve-pink lips with a gentle gloss, lightly contoured nose, no heavy eyeshadow, no bold lipstick',
+  // Jewelry — small gold hoops only
+  'small or medium plain gold hoop earrings, no necklace, no other jewelry',
+  // Face shape — anchors LoRA identity
+  'oval face with soft jawline, high cheekbones, naturally full but not exaggerated lips, slim straight nose with a small gentle tip',
+].join(', ');
+
+// Backwards-compat alias kept for any legacy callers.
+const COMPLEXION_ANCHOR = CANONICAL_LOOK;
 
 // ============================================================================
 // DIGNITY ANCHOR — non-negotiable on tech reels.
@@ -68,6 +95,8 @@ const FRAMING_ANCHOR =
 // ============================================================================
 const OUTFITS = {
   // Warm Neutrals
+  cream_knit_sweater:
+    'cozy oversized cream-ivory chunky knit crew-neck sweater with a soft ribbed crew neckline sitting at the base of her throat, slightly slouchy fit covering her shoulders comfortably, modest and elegant editorial (this is her signature look from the reference image — default for Mondays)',
   cream_round_tee:
     'fitted cream cotton round-neck t-shirt with a high modest neckline sitting at the base of her throat, no necklace, simple small gold stud earrings, minimalist editorial',
   ivory_blouse_buttoned:
@@ -247,8 +276,11 @@ async function pickCombo(forceOutfitKey, conceptId, db) {
 // ============================================================================
 function buildHeroPrompt(persona, combo, trigger) {
   return [
-    // 1. Subject + LoRA token + complexion (most important, leads the prompt)
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${COMPLEXION_ANCHOR}.`,
+    // 1. Subject + LoRA token + canonical look (most important, leads the prompt)
+    //    The CANONICAL_LOOK string is the entire identity anchor: skin hex,
+    //    hair, eyes, makeup, jewelry, face shape — every distinctive feature
+    //    of the reference image, named explicitly so Flux can't drift.
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}.`,
     // 2. Dignity guardrail (prevents trashy/vulgar drift)
     DIGNITY_ANCHOR + '.',
     // 3. Framing (locks head-and-shoulders crop)
@@ -261,8 +293,10 @@ function buildHeroPrompt(persona, combo, trigger) {
     `Wearing ${combo.outfit.value}.`,
     // 7. Setting (real-room, NOT generic AI bokeh)
     `Background: ${combo.setting.value}.`,
-    // 8. Lighting
-    'Lighting: natural ambient mixed lighting with real-world depth, hard and soft shadows, NOT uniform studio glow, NOT flat lighting.',
+    // 8. Lighting — soft, even, NOT golden-hour warm.
+    //    Warm directional light was a major contributor to the bronze drift
+    //    on the previous render. Lock to soft daylight / window light only.
+    'Lighting: soft even cool-neutral natural daylight from a large window off-camera, gentle wrap-around shadows on her face, NOT golden-hour warm orange light, NOT tungsten warm light, NOT sunset light, NOT directional warm spotlight, NOT studio glow.',
     // 9. Photographic style + realism guardrails
     'Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth, NOT bronzed, NOT tanned, NOT sun-kissed dark.',
   ].join(' ');
