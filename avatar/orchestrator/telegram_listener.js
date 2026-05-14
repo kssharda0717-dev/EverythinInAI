@@ -625,15 +625,28 @@ function parseTimeToSeconds(input) {
     return a * 60 + b;                            // m:s
   }
 
-  // Composite format like "6m 49s" or "1h 5m 12s"
+  // Composite format. Accepts BOTH compact and verbose unit names:
+  //   "6m 49s"                  -> 409
+  //   "6 min 49 sec"            -> 409
+  //   "6 minutes 49 seconds"    -> 409
+  //   "1h 5m 12s"               -> 3912
+  //   "1 hour 5 minutes 12 seconds" -> 3912
+  //   "28 minutes 34 seconds"   -> 1714
+  //
+  // Order matters: match HOURS first (hours/hour/hrs/hr/h), then MINUTES
+  // (minutes/minute/mins/min/m), then SECONDS (seconds/second/secs/sec/s).
+  // Each regex looks for a number followed by an optional space and the unit
+  // word, with a word boundary so "49s" still matches without eating the 's'
+  // of "seconds".
   let total = 0;
-  const hMatch = s.match(/(\d+(?:\.\d+)?)\s*h\b/);
-  const mMatch = s.match(/(\d+(?:\.\d+)?)\s*m\b/);
-  const sMatch = s.match(/(\d+(?:\.\d+)?)\s*s\b/);
-  if (hMatch) total += parseFloat(hMatch[1]) * 3600;
-  if (mMatch) total += parseFloat(mMatch[1]) * 60;
-  if (sMatch) total += parseFloat(sMatch[1]);
-  if (total > 0) return total;
+  let matched = false;
+  const hMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/);
+  const mMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:minutes?|mins?|m)\b/);
+  const sMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:seconds?|secs?|s)\b/);
+  if (hMatch) { total += parseFloat(hMatch[1]) * 3600; matched = true; }
+  if (mMatch) { total += parseFloat(mMatch[1]) * 60;   matched = true; }
+  if (sMatch) { total += parseFloat(sMatch[1]);        matched = true; }
+  if (matched) return total;
 
   return NaN;
 }
@@ -863,10 +876,24 @@ async function handleStats(chatId, text) {
   // Find the concept by id prefix. Can't use .ilike on uuid columns
   // (Postgres rejects with 'operator does not exist: uuid ~~* unknown').
   // Workaround: fetch recent rows and filter by prefix in JS.
-  const { data: allConcepts } = await db.from('reel_concepts')
-    .select('id, title, angle, estimated_seconds, video_url')
-    .order('created_at', { ascending: false })
-    .limit(200);
+  // We fetch BOTH video_duration (the actual rendered length, populated by
+  // video_worker after sql/025) and estimated_seconds (the LLM's guess,
+  // legacy fallback). The real duration takes priority.
+  let allConcepts = null;
+  try {
+    const r = await db.from('reel_concepts')
+      .select('id, title, angle, estimated_seconds, video_duration, video_url')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    allConcepts = r.data;
+  } catch {
+    // video_duration column not present yet — fall back to old query
+    const r = await db.from('reel_concepts')
+      .select('id, title, angle, estimated_seconds, video_url')
+      .order('created_at', { ascending: false })
+      .limit(200);
+    allConcepts = r.data;
+  }
   const concepts = (allConcepts || []).filter(c => c.id.startsWith(idPrefix.toLowerCase())).slice(0, 2);
   if (!concepts || concepts.length === 0) {
     await reply(chatId, `❌ No reel concept found with id starting with \`${idPrefix}\`.`);
@@ -878,13 +905,20 @@ async function handleStats(chatId, text) {
   }
   const concept = concepts[0];
 
+  // Prefer the actual rendered duration over the LLM's estimate.
+  // The reel_duration column on reel_performance is what gets used to
+  // compute retention_pct. If we use estimated_seconds (always 12) but the
+  // real reel was 18s, retention shows ~100% when it should be ~63%.
+  const realDuration = Number(concept.video_duration) || null;
+  const reelDuration = realDuration || concept.estimated_seconds || null;
+
   // Insert into reel_performance
   const record = {
     concept_id: concept.id,
     framework: concept.angle || 'unknown',
     views,
     avg_watch_sec: avgWatchSec,
-    reel_duration: concept.estimated_seconds || null,
+    reel_duration: reelDuration,
     likes: parseInt(params.l, 10) || 0,
     comments: parseInt(params.c, 10) || 0,
     shares: parseInt(params.s, 10) || 0,
@@ -899,19 +933,28 @@ async function handleStats(chatId, text) {
     return;
   }
 
-  // Compute retention pct for the reply
+  // Compute retention pct for the reply. NOTE: we do NOT cap at 100% in the
+  // displayed value (the DB still does for the stored column), so if the user
+  // reports a number that exceeds 100% they know something's off (likely a
+  // wrong duration source). We also flag if we fell back to the LLM estimate.
+  const durationSource = realDuration ? 'actual' : 'estimated';
   const retention = record.reel_duration > 0
-    ? Math.min(100, (record.avg_watch_sec / record.reel_duration) * 100).toFixed(1)
+    ? ((record.avg_watch_sec / record.reel_duration) * 100).toFixed(1)
     : '?';
+  const avgWatchDisplay = (Math.round(record.avg_watch_sec * 10) / 10).toFixed(1);
 
   await reply(chatId,
     `✅ *Performance Logged*\n\n` +
     `Reel: ${concept.title}\n` +
     `Framework: \`${record.framework}\`\n` +
     `Views: ${record.views}\n` +
-    `Avg Watch: ${record.avg_watch_sec}s\n` +
+    `Avg Watch: ${avgWatchDisplay}s of ${record.reel_duration || '?'}s reel (${durationSource} duration)\n` +
     `Retention: ${retention}%\n` +
     `Likes/Comments/Shares/Saves: ${record.likes}/${record.comments}/${record.shares}/${record.saves}\n\n` +
+    (durationSource === 'estimated'
+      ? `_⚠️ Used LLM-estimated duration (${record.reel_duration}s). Render this reel after the sql/025 migration is applied for accurate retention._\n\n`
+      : ''
+    ) +
     `_The LLM will use this data in its next ideation cycle to favor high-performing frameworks._`
   );
 }

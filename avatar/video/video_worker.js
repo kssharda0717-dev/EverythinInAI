@@ -198,11 +198,26 @@ async function main() {
     log.info(`Uploading final MP4...`);
     const hosted = await uploadFinal(finalMp4, concept.id);
 
-    await db.from('reel_concepts').update({
+    // Persist the ACTUAL rendered duration so /stats can compute correct retention.
+    // Previously we only stored the LLM's `estimated_seconds` guess (often wrong
+    // by 50%+), which made the retention pct in /stats nonsensical. The real
+    // duration comes straight out of the captions/audio pipeline.
+    const actualDurationSec = Number(captions.duration) || null;
+    const updatePayload = {
       video_url: hosted.publicUrl,
       state: 'ready',
       updated_at: new Date().toISOString(),
-    }).eq('id', concept.id);
+    };
+    if (actualDurationSec) updatePayload.video_duration = actualDurationSec;
+    const { error: updErr } = await db.from('reel_concepts').update(updatePayload).eq('id', concept.id);
+    if (updErr && /video_duration/.test(updErr.message)) {
+      // Column doesn't exist yet (migration 025 not applied). Retry without it.
+      log.warn(`video_duration column missing, falling back. Run sql/025 to enable accurate retention.`);
+      delete updatePayload.video_duration;
+      await db.from('reel_concepts').update(updatePayload).eq('id', concept.id);
+    } else if (updErr) {
+      throw new Error(`reel_concepts update failed: ${updErr.message}`);
+    }
 
     log.info(`══════════════════════════════════════════════`);
     log.info(`✓ ENGAGEMENT-EDITED Reel ready.`);

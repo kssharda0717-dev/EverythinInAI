@@ -53,9 +53,12 @@ async function main() {
 
   log.info(`Looking for reels POSTED between ${earliest} and ${latest}`);
 
-  // Anchor on posted_at (when the user actually published to Instagram), not completed_at (when render finished)
+  // Anchor on posted_at (when the user actually published to Instagram), not completed_at (when render finished).
+  // We also fetch check_in_alerted_at so we can dedup against rows that were
+  // already pinged once during this 4-hour window. Without this, the same reel
+  // re-fires every hour for up to 4 hours until the user replies with stats.
   const { data: dueRows, error } = await db.from('content_calendar')
-    .select('id, target_date, content_type, concept_id, posted_at, state')
+    .select('id, target_date, content_type, concept_id, posted_at, state, check_in_alerted_at')
     .gte('posted_at', earliest)
     .lte('posted_at', latest)
     .in('state', ['done', 'ready']);
@@ -80,9 +83,15 @@ async function main() {
     .in('concept_id', conceptIds);
   const loggedSet = new Set((alreadyLogged || []).map(r => r.concept_id));
 
-  const pending = dueRows.filter(r => r.concept_id && !loggedSet.has(r.concept_id));
+  // Filter: must have a concept_id, must NOT already have stats logged, AND
+  // must NOT have been alerted in this check-in window already.
+  const pending = dueRows.filter(r =>
+    r.concept_id
+    && !loggedSet.has(r.concept_id)
+    && !r.check_in_alerted_at  // dedup: skip if we already pinged for this row
+  );
   if (pending.length === 0) {
-    log.info('All due reels already have stats logged.');
+    log.info('All due reels already have stats logged or were already alerted.');
     return;
   }
 
@@ -105,12 +114,30 @@ async function main() {
       `\u23F0 *48h Check-in*\n\n` +
       `Reel posted ~${hoursOld}h ago:\n*${friendly}*\n` +
       `Framework: \`${c.angle || 'unknown'}\`\n\n` +
-      `Tap Instagram \u2192 reel \u2192 *View Insights*. Fill in:\n\n` +
-      `\`\`\`\n/stats_${idPrefix} v= totalwatch=\n\`\`\`\n\n` +
-      `_Example: /stats_${idPrefix} v=109 totalwatch=6m 49s_`;
+      `Open Instagram \u2192 reel \u2192 *View Insights*. Copy the numbers, then send:\n\n` +
+      `\`\`\`\n/stats_${idPrefix} v= totalwatch= l= c= s= sv=\n\`\`\`\n\n` +
+      `_Where:_\n` +
+      `  *v* = views (the big number at the top)\n` +
+      `  *totalwatch* = "Watch time" (e.g. \`6m 49s\` or \`28 minutes 34 seconds\`)\n` +
+      `  *l* = likes, *c* = comments, *s* = shares, *sv* = saves\n\n` +
+      `_Full example:_\n` +
+      `\`/stats_${idPrefix} v=151 totalwatch=28m 39s l=12 c=2 s=4 sv=8\``;
 
     await sendMessage(msg);
     log.info(`\u2713 Sent 48h check-in for reel ${idPrefix} (${c.angle})`);
+
+    // Mark this calendar row as alerted so the next hourly run won't re-ping it.
+    // The column is added by sql/025; if missing on older deploys, the update
+    // will silently no-op (Supabase ignores unknown columns? — actually it errors,
+    // so we wrap in try/catch so the migration can land at any time).
+    try {
+      const { error: updErr } = await db.from('content_calendar')
+        .update({ check_in_alerted_at: new Date().toISOString() })
+        .eq('id', row.id);
+      if (updErr) log.warn(`Could not mark check_in_alerted_at on ${row.id}: ${updErr.message}. Run sql/025 migration.`);
+    } catch (e) {
+      log.warn(`check_in_alerted_at update threw: ${e.message}`);
+    }
 
     // Small delay to avoid rate-limiting if multiple reels fall in the same hour
     await new Promise(r => setTimeout(r, 500));
