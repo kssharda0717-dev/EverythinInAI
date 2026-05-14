@@ -1,21 +1,25 @@
 #!/usr/bin/env node
 /**
- * EverythinInAI — Hero Keyframe Worker
+ * EverythinInAI — Hero Keyframe Worker (Tech Reels)
  *
- * Renders ONE photoreal Avi keyframe specifically optimized for SadTalker
- * lip-sync. Constraints:
- *   - Front-facing, eye-level
- *   - Mouth slightly open / relaxed (neutral)
- *   - Clear face, no obstruction
- *   - Single locked outfit (no per-Reel wardrobe drift)
+ * Renders ONE photoreal Rhea keyframe specifically optimized for talking-head
+ * lipsync. This is the Mon–Thu professional stream — head-and-shoulders only,
+ * modest neckline, smart-intellectual-IIT-grad energy.
  *
- * The outfit is randomized PER REEL but stays consistent within the Reel
- * (since this is the only keyframe).
+ * HARD RULES (do not relax these without explicit user approval):
+ *   - Front-facing, eye-level, head-and-shoulders crop
+ *   - Mouth slightly open / relaxed (neutral) for lipsync
+ *   - Clear face, no obstruction, no hands in frame
+ *   - Modest neckline ONLY (round / crew / soft V / blazer-buttoned)
+ *     NO plunging V, NO sweetheart, NO spaghetti straps, NO cleavage
+ *   - Fair-to-medium warm Indian complexion (NOT tanned, NOT dusky, NOT bronze)
+ *   - Setting must read as a real physical room, NOT generic AI bokeh
+ *   - Outfit/setting/pose rotated against the last 3 renders
  *
  * Usage:
  *   node avatar/imagery/hero_worker.js <concept_id>
  *   node avatar/imagery/hero_worker.js --winner
- *   node avatar/imagery/hero_worker.js --winner --outfit=cream_knit
+ *   node avatar/imagery/hero_worker.js --winner --outfit=cream_round_tee
  */
 
 const dbModule = require('../../engine/core/database');
@@ -26,34 +30,118 @@ const { rehostImage } = require('./storage');
 
 const log = createLogger('hero_worker');
 
-// Wardrobe options — pick ONE per Reel, lock it for all subsequent renders.
-// Each option is a complete outfit string used in the prompt.
-// NO NECKLACES — the LoRA tends to merge necklaces into skin/clothing, looking weird.
-// Just the outfit + ear accents only.
-// Outfits engineered for talking-head lipsync safety:
-// - Clean lower necklines (round / V-neck / scoop / camisole strap / sweetheart)
-// - No turtlenecks/chokers/high collars (they fold and distort during lipsync)
-// - Small stud earrings only; no necklaces
+// ============================================================================
+// COMPLEXION ANCHOR — applied to every tech-reel hero render.
+// Without this, Flux Dev biases toward bronze/dusky for "Indian content
+// creator" especially under "warm ambient" / "golden hour" lighting.
+// We need fair-to-medium warm wheatish — NOT tanned, NOT dark.
+// ============================================================================
+const COMPLEXION_ANCHOR =
+  'fair-to-medium warm wheatish Indian complexion (light skin tone, NOT tanned, NOT dusky, NOT bronze, NOT sun-kissed dark), naturally light skin similar to a young North Indian woman who works indoors';
+
+// ============================================================================
+// DIGNITY ANCHOR — non-negotiable on tech reels.
+// Rhea is an IIT Mumbai grad working at Goldman Sachs. The aesthetic is
+// SMART HOT, INTELLECTUAL HOT, BEAUTIFUL HOT — NEVER trashy, NEVER vulgar,
+// NEVER thirst-trap, NEVER sexualized. Think Ankur Warikoo's smart sister,
+// not an AI bikini page.
+// ============================================================================
+const DIGNITY_ANCHOR =
+  'smart intellectual elegance, IIT-Mumbai-graduate energy, Goldman Sachs analyst poise, dignified professional presence, beautiful and magnetic but completely non-sexualized, modest tasteful framing, NEVER vulgar, NEVER trashy, NEVER thirst-trap, NEVER cleavage, NEVER sexual';
+
+// ============================================================================
+// FRAMING ANCHOR — locks the camera crop for lipsync compatibility.
+// Spelled out aggressively because Flux likes to drift to medium shots.
+// ============================================================================
+const FRAMING_ANCHOR =
+  'tight head-and-shoulders portrait centered on her face, frame top just above her hair, frame bottom at the collarbone level (well above the chest), shoulders barely visible at the bottom edge, hands NOT in frame, arms NOT in frame, chest NOT in frame, neckline of top barely visible';
+
+// ============================================================================
+// OUTFITS — Tech-reel wardrobe.
+// All outfits are MODEST: round neck / crew / soft V / blazer buttoned over
+// shell. NO plunging V, NO sweetheart, NO spaghetti straps. The previous
+// `berry_sweetheart`, `sapphire_wrap` (deep V), `midnight_cami` and
+// `dusty_pink_cami` (spaghetti straps) and `beige_blazer_open` (low scoop
+// under blazer) all rendered with cleavage. They are removed.
+//
+// 12 modest tech-reel outfits across 3 color families.
+// ============================================================================
 const OUTFITS = {
   // Warm Neutrals
-  cream_round_tee:   'fitted cream cotton round-neck t-shirt, clean wide neckline well below collarbones, no necklace, simple small gold stud earrings, minimalist editorial',
-  beige_blazer_open: 'tailored beige blazer worn open over fitted plain white cotton tank, clean low scoop neckline, no necklace, simple small gold studs, professional editorial',
-  ivory_silk_open:   'flowy ivory silk blouse with first two buttons undone showing a clean open neckline, no necklace, no jewelry, soft editorial',
-  
+  cream_round_tee:
+    'fitted cream cotton round-neck t-shirt with a high modest neckline sitting at the base of her throat, no necklace, simple small gold stud earrings, minimalist editorial',
+  ivory_blouse_buttoned:
+    'crisp ivory cotton button-down blouse buttoned all the way up to the collarbone, soft collar, no necklace, no jewelry, soft editorial',
+  beige_blazer_buttoned:
+    'tailored beige blazer buttoned closed over a high-neck cream shell underneath, no cleavage visible, no necklace, simple small gold studs, professional Goldman Sachs editorial',
+  camel_turtleneck_lite:
+    'soft fitted camel-colored fine-knit mock-neck top sitting at the mid-neck, clean and modest, no necklace, small gold stud earrings, quiet luxury editorial',
+
   // Cool Tones
-  black_vneck:       'fitted black soft cotton v-neck top, clean wide v-neckline, no necklace, no jewelry, minimalist',
-  charcoal_scoop:    'fitted charcoal grey cotton scoop-neck tee, wide soft neckline, no necklace, small gold studs, clean editorial',
-  midnight_cami:     'fitted midnight blue silk camisole with thin straps, clean shoulder line, no necklace, simple silver studs, elegant evening editorial',
-  
-  // Bold / High-Contrast
-  berry_sweetheart:  'fitted deep berry red top with sweetheart neckline, clean open chest, no necklace, small gold hoop earrings, bold confident editorial',
-  emerald_silk:      'emerald green silk blouse with wide open V-neckline, no necklace, delicate gold stud earrings, luxurious editorial',
-  sapphire_wrap:     'sapphire blue wrap-style top with clean deep V-neck, no necklace, no jewelry, striking modern editorial',
-  
-  // Rich Accents
-  mustard_ribbed:    'fitted mustard yellow ribbed scoop-neck top, wide soft neckline, no necklace, simple gold studs, warm vibrant editorial',
-  oxblood_blazer:    'tailored oxblood red blazer over plain black scoop-neck tank, clean open neckline, no necklace, small gold studs, powerful editorial',
-  dusty_pink_cami:   'fitted dusty pink silk camisole with thin straps, clean shoulder line, no necklace, simple gold studs, soft feminine editorial',
+  black_crew:
+    'fitted black soft cotton crew-neck t-shirt with a high round neckline, no necklace, no jewelry, minimalist',
+  charcoal_round:
+    'fitted charcoal grey cotton round-neck tee, modest high neckline, no necklace, small gold studs, clean editorial',
+  navy_blazer_buttoned:
+    'tailored navy blazer buttoned closed over a high-neck white shell, fully covered chest, no necklace, simple silver studs, sharp consulting-firm editorial',
+  slate_oxford:
+    'crisp slate-blue oxford shirt buttoned to the second-from-top button, soft point collar covering the collarbone, no necklace, no jewelry, smart-casual editorial',
+
+  // Bold but Modest (color pop, NEVER skin pop)
+  emerald_blouse_buttoned:
+    'rich emerald green silk blouse buttoned up with a soft high collar covering the collarbone, no V, delicate gold stud earrings, luxurious editorial',
+  burgundy_round_knit:
+    'fitted deep burgundy fine-knit round-neck top with a modest high neckline, no necklace, small gold hoop earrings, bold confident editorial',
+  mustard_round_ribbed:
+    'fitted mustard yellow ribbed round-neck top with a high modest neckline, no necklace, simple gold studs, warm vibrant editorial',
+  oxblood_blazer_buttoned:
+    'tailored oxblood red blazer buttoned closed over a black mock-neck shell, fully covered chest, no necklace, small gold studs, powerful executive editorial',
+};
+
+// ============================================================================
+// SETTINGS — Real-room backgrounds.
+// Removed the AI-cliche `luxury_rooftop` (string lights bokeh) and `luxe_car`
+// which Flux interprets as generic "AI girl in car" thirst-trap energy.
+// Replaced with SPECIFIC, lived-in, recognizable rooms with actual props.
+// Each setting names concrete physical objects so Flux has to render them.
+// ============================================================================
+const SETTINGS = {
+  bandra_apartment_study:
+    'her actual home study in a Bandra apartment, soft beige wall directly behind her with a single framed black-and-white photograph, a tall bookshelf with real hardcover books visible at the soft-focus edge of frame, warm lamplight from a brass desk lamp slightly off-camera left, subtle real-world clutter (a small ceramic mug, a closed MacBook, a notebook), genuine room depth, NOT generic bokeh',
+  glass_office_morning:
+    'a real corner of a high-end Mumbai corporate glass office in the morning, frosted glass partition behind her with the silhouette of a colleague walking past in soft focus, a real ergonomic chair edge visible, ambient cool morning daylight from window off-camera right, subtle reflections in the glass, lived-in professional environment',
+  art_gallery_white_wall:
+    'standing in front of a real plain white art-gallery wall, a single large minimalist canvas softly visible at the right edge of frame, museum-grade overhead spotlights creating a soft directional shadow on her face, polished concrete floor reflection just out of frame, sophisticated intellectual aesthetic',
+  hotel_suite_window:
+    'seated in a real 5-star hotel suite next to a floor-to-ceiling window, soft daylight raking across her face from camera right, a beige linen curtain edge visible, a real upholstered headboard or chair in the soft-focus background, luxurious but lived-in beige and cream tones',
+  cafe_window_corner:
+    'seated at a real upscale Mumbai cafe corner table next to a large window, soft natural daylight from camera left, a real cappuccino cup, a small succulent plant, and a closed paperback book visible on the table at the bottom of frame, exposed brick wall and a chalkboard menu in the soft-focus background, lived-in cafe atmosphere',
+  library_wood_nook:
+    'seated in a real wood-paneled library nook, rich warm wooden bookshelves filled with real hardcover spines directly behind her, a brass reading lamp creating warm directional light from camera left, an open leather-bound notebook visible at the bottom of frame, deeply intellectual warm wood-tone atmosphere',
+  podcast_studio_warm:
+    'a real warm-lit podcast recording corner, a single acoustic foam panel softly visible behind her, a vintage condenser microphone slightly out of frame at the bottom edge, warm tungsten key light from camera right, real-room shadows on the wall, professional content-creator environment',
+  rooftop_garden_dusk:
+    'on a real Bandra apartment rooftop garden at dusk, real terracotta planters with leafy plants framing the soft-focus background, the warm glow of an actual neighboring building window visible in the deep background, ambient evening light, NOT a generic "rooftop bar with string lights bokeh" — a real residential rooftop',
+};
+
+// ============================================================================
+// POSES — Talking-head friendly poses.
+// All poses describe the upper body only (sitting/seated). No standing
+// full-body, no leaning back dramatically (which crops chest into frame).
+// ============================================================================
+const POSES = {
+  confident_smirk:
+    'Sitting upright with relaxed natural posture, slight confident smirk, looking directly at the camera with magnetic intelligent energy.',
+  head_tilt:
+    'Seated casually, slight playful head tilt, knowing intelligent smile, open and engaging body language with shoulders square to camera.',
+  mid_thought:
+    'Sitting straight, looking slightly off-camera as if mid-thought, highly intellectual and observant expression.',
+  intellectual_lean:
+    'Seated with a very slight forward lean from the waist, calm warm engaged expression, sharp and attentive eye contact with the viewer.',
+  direct_gaze:
+    'Sitting upright with shoulders squared to the camera, calm composed direct eye contact, the look of someone who knows what she is talking about.',
+  warm_smile:
+    'Seated upright, genuine warm closed-mouth smile reaching the eyes, relaxed and trustworthy, the kind of smile a smart friend gives you.',
 };
 
 function parseArgs(argv) {
@@ -85,36 +173,19 @@ async function getConcept(db, args) {
   return null;
 }
 
-const SETTINGS = {
-  bandra_apartment: 'clean simple out-of-focus warm-toned luxury apartment interior, soft plain wall with subtle warm gradient, gentle bokeh, Mumbai skyline faintly visible through a distant window, real-world depth with soft ambient lighting',
-  glass_office:     'blurred background of a high-end corporate glass office at dusk, sleek modern architecture, subtle cool blue and warm amber lighting reflections, professional Goldman Sachs vibe, cinematic depth of field',
-  luxury_rooftop:   'out-of-focus luxury rooftop lounge at golden hour, warm sunset lighting, subtle bokeh of string lights and distant city buildings, high-end aspirational vibe, rich contrasting shadows',
-  art_gallery:      'blurred background of a modern minimalist art gallery, stark white walls with soft gallery spotlights, sophisticated intellectual aesthetic, clean natural lighting',
-  luxe_car:         'out-of-focus interior of a luxury car, subtle premium leather textures and warm ambient dashboard lighting, high-status lifestyle vibe, rich dark tones',
-  hotel_suite:      'blurred background of a premium 5-star hotel suite, floor-to-ceiling windows with soft daylight, luxurious beige and cream tones, aspirational wealth, soft diffused sunlight',
-  cafe_window:      'blurred background of a quiet minimalist upscale cafe, soft natural daylight coming from a window off-camera, warm chic aesthetic, subtle clutter like a coffee cup or plant out of focus',
-  library_nook:     'soft out-of-focus background of rich wooden bookshelves with warm ambient lighting, cozy but highly intellectual vibe, deep rich wood tones and soft shadows',
-};
-
-const POSES = {
-  confident_smirk:  'Sitting upright with relaxed natural posture, slight confident smirk, looking directly at the camera with magnetic energy.',
-  head_tilt:        'Seated casually, slight playful head tilt, knowing smile, open and highly engaging body language.',
-  mid_thought:      'Sitting straight, looking slightly off-camera as if mid-thought, highly intellectual and observant expression.',
-  intellectual:     'Seated with a slight forward lean, calm warm expression, engaging directly with the viewer, sharp and attentive.',
-  lean_back:        'Relaxed posture leaning slightly back, exuding effortless confidence and quiet luxury, subtle warm smile.',
-  mid_laugh:        'Captured mid-laugh with a bright genuine smile, eyes sparkling with fun, highly charismatic and open energy.',
-};
-
+// ============================================================================
+// pickCombo — outfit/setting/pose rotation against last 3 renders.
+// Uses concept_id hash for deterministic-but-varied initial pick, then walks
+// the keyspace until it lands on something not used in the last 3 keyframes.
+// ============================================================================
 async function pickCombo(forceOutfitKey, conceptId, db) {
-  // Fetch recent keyframes to avoid repeating outfit/setting/pose
   const { data: recentKeyframes } = await db.from('reel_keyframes')
     .select('outfit_key, prompt')
     .order('created_at', { ascending: false })
     .limit(3);
 
   const recentOutfits = new Set((recentKeyframes || []).map(kf => kf.outfit_key).filter(Boolean));
-  
-  // Extract recent settings and poses from prompts (a bit hacky but works for avoiding immediate repeats)
+
   const recentSettings = new Set();
   const recentPoses = new Set();
   (recentKeyframes || []).forEach(kf => {
@@ -127,25 +198,21 @@ async function pickCombo(forceOutfitKey, conceptId, db) {
     });
   });
 
-  // Use a better hash to avoid clustering
+  // Deterministic 32-bit hash of concept_id so the same concept always lands
+  // on the same combo (idempotent re-renders), but different concepts diverge.
   let hash = 0;
   for (let i = 0; i < conceptId.length; i++) {
     hash = ((hash << 5) - hash) + conceptId.charCodeAt(i);
-    hash |= 0; // Convert to 32bit integer
+    hash |= 0;
   }
   hash = Math.abs(hash);
 
   const outfitKeys = Object.keys(OUTFITS);
   let outfitKey = forceOutfitKey && OUTFITS[forceOutfitKey] ? forceOutfitKey : outfitKeys[hash % outfitKeys.length];
-  
-  // If we randomly picked a recently used outfit, find the next available one
   if (!forceOutfitKey && recentOutfits.has(outfitKey)) {
     for (let i = 1; i < outfitKeys.length; i++) {
       const candidate = outfitKeys[(hash + i) % outfitKeys.length];
-      if (!recentOutfits.has(candidate)) {
-        outfitKey = candidate;
-        break;
-      }
+      if (!recentOutfits.has(candidate)) { outfitKey = candidate; break; }
     }
   }
 
@@ -154,10 +221,7 @@ async function pickCombo(forceOutfitKey, conceptId, db) {
   if (recentSettings.has(settingKey)) {
     for (let i = 1; i < settingKeys.length; i++) {
       const candidate = settingKeys[(hash * 7 + i) % settingKeys.length];
-      if (!recentSettings.has(candidate)) {
-        settingKey = candidate;
-        break;
-      }
+      if (!recentSettings.has(candidate)) { settingKey = candidate; break; }
     }
   }
 
@@ -166,30 +230,41 @@ async function pickCombo(forceOutfitKey, conceptId, db) {
   if (recentPoses.has(poseKey)) {
     for (let i = 1; i < poseKeys.length; i++) {
       const candidate = poseKeys[(hash * 13 + i) % poseKeys.length];
-      if (!recentPoses.has(candidate)) {
-        poseKey = candidate;
-        break;
-      }
+      if (!recentPoses.has(candidate)) { poseKey = candidate; break; }
     }
   }
 
   return {
     outfit:  { key: outfitKey,  value: OUTFITS[outfitKey]  },
     setting: { key: settingKey, value: SETTINGS[settingKey] },
-    pose:    { key: poseKey,    value: POSES[poseKey]    },
+    pose:    { key: poseKey,    value: POSES[poseKey]      },
   };
 }
 
+// ============================================================================
+// buildHeroPrompt — assembles the final prompt with all anchors front-loaded.
+// Order matters for Flux: the most important constraints go first.
+// ============================================================================
 function buildHeroPrompt(persona, combo, trigger) {
   return [
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator.`,
-    `Tight head-and-shoulders framing centered on her face. Hands NOT visible in frame, hands cropped out. Frame stops just above the chest. Clean shoulder line, no arms or hands shown. This is critical for talking-head video output.`,
-    `Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging eyes.`,
+    // 1. Subject + LoRA token + complexion (most important, leads the prompt)
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${COMPLEXION_ANCHOR}.`,
+    // 2. Dignity guardrail (prevents trashy/vulgar drift)
+    DIGNITY_ANCHOR + '.',
+    // 3. Framing (locks head-and-shoulders crop)
+    FRAMING_ANCHOR + '.',
+    // 4. Expression
+    'Looking directly at the camera, eye-level shot, mouth softly closed lips together NO TEETH SHOWING with a barest gentle hint of warmth, warm engaging intelligent eyes.',
+    // 5. Pose
     combo.pose.value,
+    // 6. Outfit (modest by definition — see OUTFITS dict)
     `Wearing ${combo.outfit.value}.`,
+    // 7. Setting (real-room, NOT generic AI bokeh)
     `Background: ${combo.setting.value}.`,
-    `Lighting: natural ambient mixed lighting with real-world depth, hard and soft shadows, NOT uniform studio glow, NOT flat lighting.`,
-    `Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`,
+    // 8. Lighting
+    'Lighting: natural ambient mixed lighting with real-world depth, hard and soft shadows, NOT uniform studio glow, NOT flat lighting.',
+    // 9. Photographic style + realism guardrails
+    'Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth, NOT bronzed, NOT tanned, NOT sun-kissed dark.',
   ].join(' ');
 }
 
@@ -214,12 +289,12 @@ async function renderHero({ persona, combo, conceptId, dryRun }) {
     prompt,
     lora_weights: persona.active_lora_url,
     lora_scale: 1.0,
-    aspect_ratio: '4:5',           // 4:5 = 1080x1350, IG-Reel safe
+    aspect_ratio: '4:5',
     num_outputs: 1,
     num_inference_steps: 50,
     guidance: 3.5,
     output_format: 'webp',
-    output_quality: 100,             // higher quality for the single hero shot
+    output_quality: 100,
     go_fast: false,
     seed,
   }, { timeoutMs: 300_000 });
@@ -269,10 +344,8 @@ async function main() {
   const r = await renderHero({ persona, combo, conceptId: concept.id, dryRun: args.dryRun });
   if (r.skipped) return;
 
-  // Wipe any existing keyframes for this concept (e.g. from prior multi-keyframe runs)
   await db.from('reel_keyframes').delete().eq('concept_id', concept.id);
 
-  // Insert as keyframe_idx=0
   const { error } = await db.from('reel_keyframes').insert({
     concept_id: concept.id,
     keyframe_idx: 0,
@@ -299,13 +372,19 @@ async function main() {
   log.info(`✓ Hero keyframe rendered.`);
   log.info(`   url       : ${r.image_url}`);
   log.info(`   outfit    : ${combo.outfit.key}`);
+  log.info(`   setting   : ${combo.setting.key}`);
+  log.info(`   pose      : ${combo.pose.key}`);
   log.info(`   cost      : ~$${r.cost_usd}`);
   log.info(`   gen time  : ${(r.generation_ms / 1000).toFixed(1)}s`);
   log.info(`══════════════════════════════════════════════`);
 }
 
-main().catch((err) => {
-  log.error(`Fatal: ${err.message}`);
-  log.error(err.stack);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    log.error(`Fatal: ${err.message}`);
+    log.error(err.stack);
+    process.exit(1);
+  });
+}
+
+module.exports = { OUTFITS, SETTINGS, POSES, pickCombo, buildHeroPrompt };

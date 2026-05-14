@@ -39,7 +39,7 @@ function parseJSON(rawText) {
   throw new Error(`Could not parse Gemini JSON. First 500 chars: ${rawText.substring(0, 500)}`);
 }
 
-function buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel) {
+function buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel, recentAngles) {
   let perfBlock = '';
   if (perfStats && perfStats.length > 0) {
     perfBlock = `
@@ -82,9 +82,29 @@ Notes: ${travel.notes || 'none'}
 `;
   }
 
-  const frameworksList = activeFrameworks.map(f => 
-    `- ${f.slug} (${f.display_name}): ${f.prompt_template} (Example: "${f.example_hook}")`
-  ).join('\n');
+  // ========================================================================
+  // FRAMEWORK RECENCY ROTATION
+  // recentAngles = the last 5 winning angles for this stream (newest first).
+  // We split the active framework registry into FRESH (not used recently)
+  // vs RECENT (used in last 5 winners). The LLM is told to pick from FRESH
+  // first and only fall back to RECENT if there are not enough FRESH ones.
+  // This guarantees rotation across the full registry instead of getting
+  // locked onto the same 3 frameworks Gemini naturally gravitates toward.
+  // ========================================================================
+  const recentSet = new Set((recentAngles || []).filter(Boolean));
+  const fresh = activeFrameworks.filter(f => !recentSet.has(f.slug));
+  const recent = activeFrameworks.filter(f => recentSet.has(f.slug));
+
+  const fmt = (f) => `- ${f.slug} (${f.display_name}): ${f.prompt_template} (Example: "${f.example_hook}")`;
+
+  const freshList = fresh.length ? fresh.map(fmt).join('\n') : '(none — all frameworks have been used recently, fall back to RECENT pool)';
+  const recentList = recent.length ? recent.map(fmt).join('\n') : '(none yet)';
+
+  const recentAnglesLine = recentAngles && recentAngles.length
+    ? `LAST ${recentAngles.length} WINNING ANGLES (NEWEST FIRST): ${recentAngles.join(' → ')}`
+    : 'LAST WINNING ANGLES: (none yet)';
+
+  const frameworksList = `${recentAnglesLine}\n\n=== FRESH FRAMEWORKS (PREFER THESE — they have NOT been used in the last 5 winners) ===\n${freshList}\n\n=== RECENT FRAMEWORKS (avoid unless FRESH pool is empty) ===\n${recentList}\n\nROTATION RULE (HARD): Each of your 3 concepts MUST use a DIFFERENT framework slug from the FRESH pool above. Only fall back to a RECENT framework if FRESH has fewer than 3 entries. NEVER use the same framework as the most recent winner (${recentAngles && recentAngles[0] ? recentAngles[0] : 'n/a'}).`;
 
   let taskBlock = '';
   let outputSchema = '';
@@ -302,7 +322,51 @@ async function draftConcepts(signal, lureLevel = 2, streamType = 'tech', retries
     travel = t;
   }
 
-  const prompt = buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel);
+  // ========================================================================
+  // Pull the last 5 WINNING angles for this stream so we can rotate frameworks.
+  // We look at is_winner=true rows because that's what actually shipped to IG.
+  // If the user hasn't picked winners recently, fall back to the most recent
+  // 5 concepts of any state (still drafted by us, still in our history).
+  // ========================================================================
+  // content_type uses suffixed values: 'tech_reel' / 'lure_photo' / 'lifestyle_reel'
+  // streamType uses bare values:        'tech'      / 'lure'       / 'lifestyle'
+  // Map between them for the recency query.
+  const STREAM_TO_CONTENT_TYPE = {
+    tech: 'tech_reel',
+    lure: 'lure_photo',
+    lifestyle: 'lifestyle_reel',
+  };
+  const contentTypeForQuery = STREAM_TO_CONTENT_TYPE[streamType] || streamType;
+
+  let recentAngles = [];
+  try {
+    const { data: winners } = await db.from('reel_concepts')
+      .select('angle, created_at')
+      .eq('content_type', contentTypeForQuery)
+      .eq('is_winner', true)
+      .order('created_at', { ascending: false })
+      .limit(5);
+    recentAngles = (winners || []).map(w => w.angle).filter(Boolean);
+
+    // Fallback: if we don't have 5 winners yet, fill from any recent concepts.
+    if (recentAngles.length < 5) {
+      const { data: anyRecent } = await db.from('reel_concepts')
+        .select('angle')
+        .eq('content_type', contentTypeForQuery)
+        .order('created_at', { ascending: false })
+        .limit(10);
+      const extras = (anyRecent || []).map(r => r.angle).filter(Boolean);
+      for (const a of extras) {
+        if (recentAngles.length >= 5) break;
+        if (!recentAngles.includes(a)) recentAngles.push(a);
+      }
+    }
+    log.info(`Recent angles for ${streamType}: [${recentAngles.join(', ')}] — ${activeFrameworks.length - recentAngles.length} fresh frameworks available`);
+  } catch (err) {
+    log.warn(`Could not fetch recent angles for rotation: ${err.message}`);
+  }
+
+  const prompt = buildPrompt(persona, signal, lureLevel, perfStats, activeFrameworks, streamType, trends, travel, recentAngles);
 
   const apiKey = config.gemini.apiKey;
   if (!apiKey) throw new Error('GEMINI_API_KEY missing');
