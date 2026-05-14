@@ -131,3 +131,11 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
    'Generate a Lifestyle video concept where Rhea is twirling and dancing playfully in a beautiful minimalist apartment. Captured mid-laugh, hair flowing dynamically. Warm evening light. Outfit: flowing silk slip dress, bare feet. Music: upbeat indie pop. Vibe: pure unfiltered joy.',
    'Sunday self-care', 1, 'Joyful candid content makes the audience parasocially fall in love')
 ON CONFLICT (slug) DO NOTHING;
+
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_frameworks TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

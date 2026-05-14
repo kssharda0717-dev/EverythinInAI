@@ -85,5 +85,13 @@ ALTER TABLE reel_concepts ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS reel_concepts_public_read ON reel_concepts;
 CREATE POLICY reel_concepts_public_read ON reel_concepts FOR SELECT USING (TRUE);
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE reel_concepts TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'reel_concepts schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'reel_concepts') AS exists;

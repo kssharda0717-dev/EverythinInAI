@@ -17,5 +17,13 @@ CREATE INDEX IF NOT EXISTS idx_newsletter_active ON newsletter_subscribers (subs
 -- RLS: writes are server-only (service key); no public read.
 ALTER TABLE newsletter_subscribers ENABLE ROW LEVEL SECURITY;
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE newsletter_subscribers TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'newsletter schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'newsletter_subscribers') AS exists;

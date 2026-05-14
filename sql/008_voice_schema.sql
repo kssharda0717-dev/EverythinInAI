@@ -58,5 +58,13 @@ ALTER TABLE reel_concepts
     ADD COLUMN IF NOT EXISTS voice_model TEXT,
     ADD COLUMN IF NOT EXISTS talking_head_url TEXT;     -- raw OmniHuman output (pre-engagement-edit)
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE persona_voice_refs TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'voice schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'persona_voice_refs') AS exists;

@@ -13,3 +13,11 @@ CREATE TABLE IF NOT EXISTS pending_check_ins (
 
 CREATE INDEX IF NOT EXISTS idx_pending_check_ins_created
   ON pending_check_ins(created_at DESC);
+
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE pending_check_ins TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

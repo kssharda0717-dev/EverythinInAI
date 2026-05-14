@@ -56,5 +56,13 @@ ALTER TABLE personas
     ADD COLUMN IF NOT EXISTS active_lora_url TEXT,
     ADD COLUMN IF NOT EXISTS active_lora_trigger TEXT;
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE persona_loras TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'persona loras schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'persona_loras') AS exists;

@@ -23,4 +23,11 @@ CREATE INDEX IF NOT EXISTS idx_content_calendar_check_in_pending
   ON content_calendar(posted_at)
   WHERE check_in_alerted_at IS NULL AND posted_at IS NOT NULL;
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_calendar TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE reel_concepts TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

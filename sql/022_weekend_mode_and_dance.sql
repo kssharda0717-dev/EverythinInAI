@@ -34,3 +34,11 @@ CREATE TABLE IF NOT EXISTS pending_audio_uploads (
 
 CREATE INDEX IF NOT EXISTS idx_pending_audio_chat
   ON pending_audio_uploads(chat_id, status, created_at DESC);
+
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE pending_audio_uploads TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

@@ -15,4 +15,11 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
    1, 'Pain-driven hooks generate 2-3x more comments because viewers self-identify with the frustration before they hear the solution.')
 ON CONFLICT (slug) DO NOTHING;
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+-- (Grants are applied to the table itself, but we include them here for completeness)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_frameworks TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

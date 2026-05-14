@@ -245,8 +245,19 @@ SELECT
     DATE(NOW()) AS as_of,
     (SELECT COUNT(*) FROM tools WHERE is_active = TRUE)                                   AS total_active_tools,
     (SELECT COUNT(*) FROM tools WHERE added_at > NOW() - INTERVAL '24 hours')             AS tools_added_24h,
-    (SELECT COUNT(*) FROM ai_signals WHERE is_active = TRUE)                              AS total_active_signals,
-    (SELECT COUNT(*) FROM ai_signals WHERE added_at > NOW() - INTERVAL '24 hours')        AS signals_added_24h,
+    (SELECT COUNT(*) FROM ai_signals WHERE is_active = TRUE)                              AS total_active_signals,    (SELECT COUNT(*) FROM ai_signals WHERE added_at > NOW() - INTERVAL '24 hours')         AS signals_last_24h;
+
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ai_signals TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE avatar_briefs TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE signal_sources TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE engine_metrics TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+GRANT SELECT ON v_daily_digest TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';,
     (SELECT COUNT(*) FROM ai_signals WHERE added_at > NOW() - INTERVAL '24 hours' AND virality_score >= 7) AS hot_signals_24h,
     (SELECT COUNT(*) FROM avatar_briefs WHERE status = 'ready_for_review')                AS briefs_awaiting_review,
     (SELECT COUNT(*) FROM avatar_briefs WHERE status = 'posted' AND posted_at > NOW() - INTERVAL '24 hours') AS posts_today,

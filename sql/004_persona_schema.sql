@@ -73,5 +73,13 @@ ALTER TABLE personas ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS personas_public_read ON personas;
 CREATE POLICY personas_public_read ON personas FOR SELECT USING (is_active = TRUE);
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE personas TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'persona schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name = 'personas') AS exists;

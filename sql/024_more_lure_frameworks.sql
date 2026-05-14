@@ -45,4 +45,10 @@ INSERT INTO content_frameworks (slug, stream, display_name, description, prompt_
 
 ON CONFLICT (slug) DO NOTHING;
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_frameworks TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

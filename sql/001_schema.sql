@@ -189,3 +189,15 @@ SELECT json_build_object(
         '[]'::json
     )
 ) AS export_json;
+
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE tools TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE discovery_queue TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE runs TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE backfill_progress TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+GRANT SELECT ON tools_json_export TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';

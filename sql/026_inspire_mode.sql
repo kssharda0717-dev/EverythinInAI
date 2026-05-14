@@ -31,4 +31,10 @@ CREATE INDEX IF NOT EXISTS idx_content_calendar_inspire
   ON content_calendar(weekend_mode)
   WHERE weekend_mode = 'inspire';
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_calendar TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
 NOTIFY pgrst, 'reload schema';

@@ -44,5 +44,14 @@ CREATE TABLE IF NOT EXISTS render_steps (
 
 CREATE INDEX IF NOT EXISTS idx_steps_calendar ON render_steps (calendar_id);
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE content_calendar TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE render_steps TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'content calendar schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('content_calendar','render_steps')) AS tables_created;

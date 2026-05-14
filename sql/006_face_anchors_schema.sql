@@ -77,5 +77,14 @@ ALTER TABLE reel_keyframes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS reel_keyframes_public_read ON reel_keyframes;
 CREATE POLICY reel_keyframes_public_read ON reel_keyframes FOR SELECT USING (TRUE);
 
+-- ─── SECURITY FUTURE-PROOFING (EXPLICIT GRANTS) ──────────────────────────────
+-- Required for Supabase Data API changes (May/Oct 2026)
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE face_anchors TO authenticated, service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE reel_keyframes TO authenticated, service_role;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated, service_role;
+
+-- Reload the PostgREST schema cache
+NOTIFY pgrst, 'reload schema';
+
 SELECT 'face anchors + keyframes schema applied' AS status,
        (SELECT COUNT(*) FROM information_schema.tables WHERE table_name IN ('face_anchors','reel_keyframes')) AS tables_created;
