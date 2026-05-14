@@ -27,54 +27,28 @@ const { createLogger } = require('../../engine/utils/logger');
 const personaService = require('../persona/persona_service');
 const { runModel } = require('./replicate_client');
 const { rehostImage } = require('./storage');
+const {
+  CANONICAL_LOOK,
+  DIGNITY_ANCHOR: SHARED_DIGNITY_ANCHOR,
+  LIGHTING_NEUTRAL_DAYLIGHT,
+} = require('../persona/canonical_look');
 
 const log = createLogger('hero_worker');
 
 // ============================================================================
-// CANONICAL LOOK ANCHOR — Rhea's identity locked to the user's reference photo
-// (avatar/persona/references/canonical_rhea.webp).
-//
-// Empirical color analysis of the reference image (sampled across forehead,
-// cheeks, chin):
-//   AVG SKIN HEX = #A17B63   RGB = (161, 124,  99)   warm wheatish
-//
-// Empirical color of the LATEST drifted render (the one user rejected):
-//   AVG SKIN HEX = #7F4A30   RGB = (128,  74,  48)   deep bronze/dusky
-//
-// That's a -34% luminance drift. Flux Dev's "Indian content creator" prior
-// pulls hard toward bronze unless we anchor the look with concrete, named,
-// photographic features of the actual reference image.
-//
-// Below: every distinctive feature of canonical Rhea, named explicitly so
-// Flux has nothing to hallucinate.
+// IDENTITY ANCHOR — imported from the shared canonical_look module so all 3
+// streams (tech / lure / lifestyle) speak the exact same identity to Flux.
+// See avatar/persona/canonical_look.js for the full description and rationale.
 // ============================================================================
-const CANONICAL_LOOK = [
-  // Skin — hex-anchored, double-negated, north-Indian-specific
-  'fair north-Indian wheatish complexion (skin tone hex roughly #A17B63, soft warm beige with subtle pink undertone, light enough that her cheekbones catch warm highlights cleanly), the complexion of a young Delhi-born North-Indian woman who works indoors in air-conditioned offices, NEVER tanned, NEVER dusky, NEVER bronze, NEVER sun-kissed dark, NEVER deep brown',
-  // Hair — long, loose, wavy (NOT tight bun, NOT pulled back)
-  'long dark brown softly wavy hair flowing loosely down past her shoulders on both sides of her face with natural face-framing pieces, side part, NOT tied up, NOT in a bun, NOT slicked back, soft volume at the crown',
-  // Eyes / brows — defined but soft
-  'large warm dark brown almond-shaped eyes with soft lifted eyeliner and lightly defined natural brows, calm intelligent gaze',
-  // Makeup — soft glam, mauve-pink lip
-  'soft natural glam makeup: dewy skin finish (NOT matte, NOT plastic), subtle peach blush on cheekbones, soft mauve-pink lips with a gentle gloss, lightly contoured nose, no heavy eyeshadow, no bold lipstick',
-  // Jewelry — small gold hoops only
-  'small or medium plain gold hoop earrings, no necklace, no other jewelry',
-  // Face shape — anchors LoRA identity
-  'oval face with soft jawline, high cheekbones, naturally full but not exaggerated lips, slim straight nose with a small gentle tip',
-].join(', ');
-
 // Backwards-compat alias kept for any legacy callers.
 const COMPLEXION_ANCHOR = CANONICAL_LOOK;
 
 // ============================================================================
-// DIGNITY ANCHOR — non-negotiable on tech reels.
-// Rhea is an IIT Mumbai grad working at Goldman Sachs. The aesthetic is
-// SMART HOT, INTELLECTUAL HOT, BEAUTIFUL HOT — NEVER trashy, NEVER vulgar,
-// NEVER thirst-trap, NEVER sexualized. Think Ankur Warikoo's smart sister,
-// not an AI bikini page.
+// DIGNITY ANCHOR — tech-reel variant adds explicit no-cleavage clauses on top
+// of the shared dignity anchor. Imported base dignity is amplified with the
+// stream-specific guardrails.
 // ============================================================================
-const DIGNITY_ANCHOR =
-  'smart intellectual elegance, IIT-Mumbai-graduate energy, Goldman Sachs analyst poise, dignified professional presence, beautiful and magnetic but completely non-sexualized, modest tasteful framing, NEVER vulgar, NEVER trashy, NEVER thirst-trap, NEVER cleavage, NEVER sexual';
+const DIGNITY_ANCHOR = `${SHARED_DIGNITY_ANCHOR}, modest tasteful framing, NEVER cleavage, NEVER sexual, NEVER thirst-trap`;
 
 // ============================================================================
 // FRAMING ANCHOR — locks the camera crop for lipsync compatibility.
@@ -293,10 +267,8 @@ function buildHeroPrompt(persona, combo, trigger) {
     `Wearing ${combo.outfit.value}.`,
     // 7. Setting (real-room, NOT generic AI bokeh)
     `Background: ${combo.setting.value}.`,
-    // 8. Lighting — soft, even, NOT golden-hour warm.
-    //    Warm directional light was a major contributor to the bronze drift
-    //    on the previous render. Lock to soft daylight / window light only.
-    'Lighting: soft even cool-neutral natural daylight from a large window off-camera, gentle wrap-around shadows on her face, NOT golden-hour warm orange light, NOT tungsten warm light, NOT sunset light, NOT directional warm spotlight, NOT studio glow.',
+    // 8. Lighting — imported from shared module. Soft, even, NOT golden-hour.
+    `Lighting: ${LIGHTING_NEUTRAL_DAYLIGHT}.`,
     // 9. Photographic style + realism guardrails
     'Photographic style: shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth, NOT bronzed, NOT tanned, NOT sun-kissed dark.',
   ].join(' ');

@@ -30,6 +30,11 @@ const { createLogger } = require('../../engine/utils/logger');
 const personaService = require('../persona/persona_service');
 const { runModel } = require('../imagery/replicate_client');
 const { rehostImage } = require('../imagery/storage');
+const {
+  CANONICAL_LOOK,
+  COMPLEXION_NEGATIONS,
+  DIGNITY_ANCHOR: SHARED_DIGNITY_ANCHOR,
+} = require('../persona/canonical_look');
 
 const log = createLogger('lure_photo');
 
@@ -195,9 +200,16 @@ function buildPrompt(sceneKey, persona, trigger) {
   const scene = SCENES[sceneKey];
   return [
     OUTCOME_SPEC,
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
+    // Identity FIRST: canonical look (skin hex, hair, eyes, makeup, hoops, face
+    // shape) anchors the LoRA before any scene-specific words can pull it off.
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
+    // Dignity guardrail — lure variant: tasteful, never vulgar, never thirst-trap.
+    `${SHARED_DIGNITY_ANCHOR}, tastefully feminine, body shown is incidental to the lifestyle moment.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
+    // Extra complexion protection because lure scenes often involve golden
+    // hour / beach / poolside which Flux would otherwise bronze.
+    COMPLEXION_NEGATIONS,
     STYLE_ANCHOR,
   ].join(' ');
 }
@@ -210,19 +222,26 @@ function buildPromptFromConcept(concept, trigger) {
   let prompt = concept.image_prompt || '';
   // Ensure the LoRA trigger token is present
   if (!prompt.includes(trigger) && !prompt.includes('AVI_TOK')) {
-    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. ${prompt}`;
+    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}. ${prompt}`;
   } else if (!prompt.toLowerCase().includes('hourglass') && !prompt.toLowerCase().includes('curves')) {
-    // LLM-supplied prompt didn't describe the body — inject the curvy descriptor early.
     prompt = prompt.replace(
       /Indian content creator/i,
-      `Indian content creator with ${CURVY_BODY}`
+      `Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}`
+    );
+  } else if (!prompt.includes('#A17B63')) {
+    // Curves were named but identity/skin tone was not — inject canonical look.
+    prompt = prompt.replace(
+      /Indian content creator[^.]*\./i,
+      (m) => `${m} Identity: ${CANONICAL_LOOK}.`
     );
   }
   // Reinforce style if the LLM forgot
   if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
     prompt += ` ${STYLE_ANCHOR}`;
   }
-  return `${OUTCOME_SPEC} ${prompt}`;
+  // Always add complexion negations and dignity at the end — these are short
+  // and Flux weights end-of-prompt instructions strongly.
+  return `${OUTCOME_SPEC} ${prompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
 }
 
 async function renderLurePhoto({ persona, sceneKey, calendarId }) {

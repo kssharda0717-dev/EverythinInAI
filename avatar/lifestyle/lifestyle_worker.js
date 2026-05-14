@@ -30,6 +30,11 @@ const { runModel } = require('../imagery/replicate_client');
 const { rehostImage } = require('../imagery/storage');
 const { getMusicTrack } = require('../video/asset_library');
 const { spawnSync } = require('child_process');
+const {
+  CANONICAL_LOOK,
+  COMPLEXION_NEGATIONS,
+  DIGNITY_ANCHOR: SHARED_DIGNITY_ANCHOR,
+} = require('../persona/canonical_look');
 
 const log = createLogger('lifestyle');
 
@@ -189,16 +194,31 @@ function pickMood(forceKey) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
+// Shared cinematic-action photo style anchor.
+const LIFESTYLE_PHOTO_STYLE = 'Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth, NOT bronzed, NOT tanned, NOT sun-kissed dark.';
+
 function buildHeroPrompt(mood, trigger) {
-  // If the LLM-generated keyframe prompt already includes the trigger, use it directly.
+  // If the LLM-generated keyframe prompt already includes the trigger, use it
+  // but still bolt the canonical look + complexion negations on the front so
+  // skin tone/identity stays locked.
   if (mood.keyframe_prompt && mood.keyframe_prompt.includes(trigger)) {
-    return mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '') + ' Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.';
+    const llmPrompt = mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '');
+    return [
+      `Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
+      `${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`,
+      llmPrompt,
+      COMPLEXION_NEGATIONS,
+      LIFESTYLE_PHOTO_STYLE,
+    ].join(' ');
   }
   return [
-    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}.`,
+    // Identity anchored FIRST so Flux locks skin/hair/eyes before scene words can drift it.
+    `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
+    `${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`,
     mood.keyframe_prompt + '.',
     mood.outfit ? `Wearing: ${mood.outfit}.` : '',
-    `Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`,
+    COMPLEXION_NEGATIONS,
+    LIFESTYLE_PHOTO_STYLE,
   ].filter(Boolean).join(' ');
 }
 
@@ -288,7 +308,13 @@ async function main() {
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `dance-${runId.slice(0, 14)}-`));
 
     // Step 1: hero image — Rhea in dance pose, mid-move
-    const danceHeroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic full-body stance showing her hourglass silhouette in motion, confident gaze at the camera. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion. Photographic style: cinematic action photograph, shot on iPhone 15 Pro Max main camera at 24mm, raw unedited iPhone capture aesthetic, photorealistic ultra-detailed skin with visible pores and faint freckles, natural skin texture variation, very subtle 35mm film grain across the image, real-world depth of field, candid documentary feel like a photo a friend just took, highly engaging and highly desirable but believably real, asymmetric natural beauty, slight imperfections in skin and face that make it feel human, NOT illustration, NOT cartoon, NOT cgi, NOT 3D render, NOT airbrushed, NOT plastic skin, NOT perfectly symmetric, NOT studio-glow-smooth.`;
+    const danceHeroPrompt = [
+      `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
+      `${SHARED_DIGNITY_ANCHOR}, dancing tastefully, joyful and elegant.`,
+      'Mid-dance pose in a beautifully lit dance studio with full-length mirrors, dynamic energetic full-body stance showing her hourglass silhouette in motion, confident gaze at the camera. Wearing: chic crop top and high-waisted wide-leg pants, hair flowing dynamically with the motion.',
+      COMPLEXION_NEGATIONS,
+      LIFESTYLE_PHOTO_STYLE,
+    ].join(' ');
     const heroSeed = Math.floor(Math.random() * 1_000_000);
     log.info(`[1/3] Rendering dance hero image (Flux+LoRA)...`);
     const heroResult = await runModel('flux_dev_lora', {
@@ -362,16 +388,27 @@ async function main() {
     moodKey = concept.angle || 'llm_concept';
     // Build the mood object from concept fields. The LLM's prompts override the static MOODS map.
     let kfPrompt = concept.keyframe_prompt;
-    // Inject curvy descriptor if the LLM-generated prompt didn't include one
+    // Inject canonical identity into LLM-generated prompts. The LLM never
+    // generates the hex-anchored skin description on its own, so we always
+    // splice it in before sending to Flux.
     if (!kfPrompt.toLowerCase().includes('hourglass') && !kfPrompt.toLowerCase().includes('curves')) {
       kfPrompt = kfPrompt.replace(
         /Indian content creator/i,
-        `Indian content creator with ${CURVY_BODY}`
+        `Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}`
+      );
+    } else if (!kfPrompt.includes('#A17B63')) {
+      // Curves were named but identity/skin tone was not.
+      kfPrompt = kfPrompt.replace(
+        /Indian content creator[^.]*\./i,
+        (m) => `${m} Identity: ${CANONICAL_LOOK}.`
       );
     }
     if (!kfPrompt.includes(trigger) && !kfPrompt.includes('AVI_TOK')) {
-      kfPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator with ${CURVY_BODY}. ${kfPrompt}`;
+      kfPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}. ${kfPrompt}`;
     }
+    // Always append complexion negations and dignity at the end — Flux weights
+    // late prompt instructions strongly.
+    kfPrompt = `${kfPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
     mood = {
       label: concept.title || 'LLM Lifestyle Concept',
       keyframe_prompt: kfPrompt,
