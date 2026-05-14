@@ -44,61 +44,87 @@ const log = createLogger('hero_worker');
 const COMPLEXION_ANCHOR = CANONICAL_LOOK;
 
 // ============================================================================
-// DIGNITY ANCHOR — tech-reel variant adds explicit no-cleavage clauses on top
-// of the shared dignity anchor. Imported base dignity is amplified with the
-// stream-specific guardrails.
+// DIGNITY ANCHOR — tech-reel variant.
+//
+// Calibration: SUBTLE ALLURE IS ALLOWED AND DESIRED.
+// Without it tech reels are scroll-dead. The fix is to allow magnetic, alluring,
+// beautifully feminine energy WHILE banning the specific failure modes:
+//   - plunging V-neck spilling cleavage
+//   - bralette / spaghetti strap cami visible (the today's-render failure)
+//   - exposed midriff / underboob
+//   - bedroom thirst-trap framing
+// What IS allowed:
+//   - soft scoop / soft V neckline (a hint of collarbone and the start of
+//     decolletage, like Kiara Advani in a magazine cover)
+//   - off-shoulder knit (one shoulder visible)
+//   - fitted top showing her natural feminine silhouette
+//   - magnetic eye contact, knowing smirk, IIT-grad-who-knows-she's-hot energy
 // ============================================================================
-const DIGNITY_ANCHOR = `${SHARED_DIGNITY_ANCHOR}, modest tasteful framing, NEVER cleavage, NEVER sexual, NEVER thirst-trap`;
+const DIGNITY_ANCHOR = `${SHARED_DIGNITY_ANCHOR}, magnetic alluring beautifully feminine energy (Kiara Advani / Tara Sutaria magazine-cover quality), subtle hint of collarbone and the very top of decolletage is allowed and desired, tasteful suggestion of her natural feminine silhouette is allowed, BUT NEVER plunging V-neck spilling cleavage, NEVER bralette or spaghetti-strap cami visible, NEVER exposed midriff or underboob, NEVER bedroom thirst-trap framing, NEVER trashy, NEVER vulgar`;
 
 // ============================================================================
 // FRAMING ANCHOR — locks the camera crop for lipsync compatibility.
-// Spelled out aggressively because Flux likes to drift to medium shots.
+// Allows hint of collarbone / very top of decolletage but cuts off well above
+// any cleavage. The frame ends at the upper chest, NOT mid-chest.
 // ============================================================================
 const FRAMING_ANCHOR =
-  'tight head-and-shoulders portrait centered on her face, frame top just above her hair, frame bottom at the collarbone level (well above the chest), shoulders barely visible at the bottom edge, hands NOT in frame, arms NOT in frame, chest NOT in frame, neckline of top barely visible';
+  'head-and-upper-shoulders portrait centered on her face, frame top just above her hair, frame bottom at the upper chest just below the collarbone (the very top of the decolletage may be visible but the chest itself is NOT in frame), shoulders visible at the bottom edge, hands NOT in frame, arms NOT in frame, full chest NOT in frame, no cleavage visible, the neckline of her top is partially visible';
 
 // ============================================================================
-// OUTFITS — Tech-reel wardrobe.
-// All outfits are MODEST: round neck / crew / soft V / blazer buttoned over
-// shell. NO plunging V, NO sweetheart, NO spaghetti straps. The previous
-// `berry_sweetheart`, `sapphire_wrap` (deep V), `midnight_cami` and
-// `dusty_pink_cami` (spaghetti straps) and `beige_blazer_open` (low scoop
-// under blazer) all rendered with cleavage. They are removed.
+// OUTFITS — Tech-reel wardrobe (RECALIBRATED for subtle allure).
 //
-// 12 modest tech-reel outfits across 3 color families.
+// User feedback: "no cleavage and no allure on tech reels will be extremely
+// dead". Correct — a modest crew-neck tee every day kills scroll-stop.
+//
+// New calibration: each outfit either shows a hint of decolletage (soft scoop
+// or soft V that stops well above cleavage) OR shows shoulders/collarbone
+// (off-shoulder knit, fitted top), but NEVER:
+//   - plunging V that exposes cleavage
+//   - sweetheart neckline (caused today's failure)
+//   - spaghetti straps / bralette visible (caused today's failure)
+//   - exposed midriff
+//
+// Think Kiara Advani in a Vogue cover, Tara Sutaria in a Filmfare shoot,
+// Sara Ali Khan on a podcast — desirable, magnetic, but always tasteful.
+//
+// 14 outfits across 4 vibe buckets.
 // ============================================================================
 const OUTFITS = {
-  // Warm Neutrals
+  // ===== Warm Neutrals — cozy x magnetic =====
   cream_knit_sweater:
-    'cozy oversized cream-ivory chunky knit crew-neck sweater with a soft ribbed crew neckline sitting at the base of her throat, slightly slouchy fit covering her shoulders comfortably, modest and elegant editorial (this is her signature look from the reference image — default for Mondays)',
-  cream_round_tee:
-    'fitted cream cotton round-neck t-shirt with a high modest neckline sitting at the base of her throat, no necklace, simple small gold stud earrings, minimalist editorial',
-  ivory_blouse_buttoned:
-    'crisp ivory cotton button-down blouse buttoned all the way up to the collarbone, soft collar, no necklace, no jewelry, soft editorial',
-  beige_blazer_buttoned:
-    'tailored beige blazer buttoned closed over a high-neck cream shell underneath, no cleavage visible, no necklace, simple small gold studs, professional Goldman Sachs editorial',
-  camel_turtleneck_lite:
-    'soft fitted camel-colored fine-knit mock-neck top sitting at the mid-neck, clean and modest, no necklace, small gold stud earrings, quiet luxury editorial',
+    'cozy cream-ivory chunky knit crew-neck sweater with a soft ribbed crew neckline sitting at the base of her throat, slightly slouchy fit (her signature look from the reference image), elegant magnetic editorial',
+  ivory_off_shoulder_knit:
+    'soft ivory fine-knit top worn off one shoulder showing her collarbone and the line of her bare shoulder elegantly, the other shoulder still covered, no bralette or strap visible underneath, tastefully alluring editorial like a Vogue India cover',
+  beige_blazer_soft_scoop:
+    'tailored beige blazer worn open over a fitted cream cotton soft-scoop-neck top underneath, the scoop neckline shows a gentle hint of collarbone but stops well above the chest, no cleavage, simple small gold studs, magnetic Goldman Sachs editorial',
+  camel_mock_neck:
+    'soft fitted camel-colored fine-knit mock-neck top sitting at the mid-neck, body-skimming fit showing her natural feminine silhouette, no necklace, small gold stud earrings, quiet luxury magnetic editorial',
 
-  // Cool Tones
-  black_crew:
-    'fitted black soft cotton crew-neck t-shirt with a high round neckline, no necklace, no jewelry, minimalist',
-  charcoal_round:
-    'fitted charcoal grey cotton round-neck tee, modest high neckline, no necklace, small gold studs, clean editorial',
-  navy_blazer_buttoned:
-    'tailored navy blazer buttoned closed over a high-neck white shell, fully covered chest, no necklace, simple silver studs, sharp consulting-firm editorial',
-  slate_oxford:
-    'crisp slate-blue oxford shirt buttoned to the second-from-top button, soft point collar covering the collarbone, no necklace, no jewelry, smart-casual editorial',
+  // ===== Cool Tones — sharp x intelligent =====
+  black_soft_v:
+    'fitted black soft cotton t-shirt with a soft modest V-neckline (the V stops at the top of the collarbone, well above any cleavage), shows a hint of decolletage tastefully, no necklace, small gold hoop earrings, magnetic minimalist editorial',
+  charcoal_scoop:
+    'fitted charcoal grey cotton scoop-neck tee with a soft wide neckline showing collarbones, body-skimming feminine fit, no necklace, small gold studs, magnetic clean editorial',
+  navy_blazer_open_shell:
+    'tailored navy blazer worn open over a fitted white silk shell with a soft scoop neckline that shows a hint of collarbone, no cleavage, no necklace, simple silver studs, sharp magnetic consulting-firm editorial',
+  slate_oxford_unbuttoned_top:
+    'crisp slate-blue oxford shirt with the top two buttons undone showing the collarbone area but no chest, soft point collar, sleeves rolled to the forearm, no necklace, small gold studs, smart-casual magnetic editorial',
 
-  // Bold but Modest (color pop, NEVER skin pop)
-  emerald_blouse_buttoned:
-    'rich emerald green silk blouse buttoned up with a soft high collar covering the collarbone, no V, delicate gold stud earrings, luxurious editorial',
-  burgundy_round_knit:
-    'fitted deep burgundy fine-knit round-neck top with a modest high neckline, no necklace, small gold hoop earrings, bold confident editorial',
-  mustard_round_ribbed:
-    'fitted mustard yellow ribbed round-neck top with a high modest neckline, no necklace, simple gold studs, warm vibrant editorial',
-  oxblood_blazer_buttoned:
-    'tailored oxblood red blazer buttoned closed over a black mock-neck shell, fully covered chest, no necklace, small gold studs, powerful executive editorial',
+  // ===== Bold Pop — magnetic colour, tasteful skin =====
+  emerald_silk_soft_v:
+    'rich emerald green silk blouse with a soft modest V-neckline (the V stops just below the collarbone, well above the chest, no cleavage visible), delicate gold stud earrings, magnetic luxurious editorial',
+  burgundy_off_shoulder:
+    'fitted deep burgundy fine-knit top worn off one shoulder showing her bare shoulder line elegantly, the other shoulder fully covered, no strap visible, no chest visible, magnetic bold editorial',
+  mustard_scoop_ribbed:
+    'fitted mustard yellow ribbed scoop-neck top with a soft wide neckline showing collarbones tastefully, body-skimming feminine fit, no necklace, simple gold studs, warm vibrant magnetic editorial',
+  oxblood_blazer_soft_v:
+    'tailored oxblood red blazer worn open over a fitted black soft-V-neck shell (the V stops at the collarbone, no cleavage), no necklace, small gold studs, powerful magnetic executive editorial',
+
+  // ===== Soft Glam =====
+  dusty_pink_silk_scoop:
+    'fitted dusty pink silk blouse with a soft scoop neckline showing collarbones tastefully (no cleavage, scoop stops well above chest), small gold drop earrings, soft feminine magnetic editorial',
+  champagne_satin_button_down:
+    'champagne satin button-down blouse with the top two buttons undone showing the collarbone area only (no chest, no cleavage), soft camp collar, fitted feminine cut, small gold hoops, evening magnetic editorial',
 };
 
 // ============================================================================
