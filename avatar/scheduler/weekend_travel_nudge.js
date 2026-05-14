@@ -85,7 +85,7 @@ async function main() {
     return;
   }
 
-  // No mode picked — ask the 3-option menu
+  // No mode picked — ask the 4-option menu
   const msg =
     `🌟 *Weekend Mode for Rhea*\n\n` +
     `Sat ${saturday} + Sun ${sunday}\n\n` +
@@ -93,10 +93,11 @@ async function main() {
     `🏠 \`/home\` — both reels in Bandra/Mumbai\n\n` +
     `✈️ \`/travel <city> <vibe>\` — e.g., \`/travel Goa beach\`, \`/travel Bali resort\`\n   (both reels set in that location)\n\n` +
     `💃 \`/dance\` — both reels are lip-synced dance videos\n   (I'll then ask you to forward 2 audio files, one for Sat and one for Sun)\n\n` +
+    `✨ \`/inspire\` — Rhea renders her own version of 2 reels you forward (same vibe, same audio, Rhea's face/body, Rhea's setting)\n   (I'll ask you to forward 2 reference reels, IG URL or video both work)\n\n` +
     `_Default if you don't reply: \`home\`._`;
 
   await sendMessage(msg);
-  log.info(`✓ Sent weekend mode nudge (home/travel/dance).`);
+  log.info(`✓ Sent weekend mode nudge (home/travel/dance/inspire).`);
 }
 
 if (require.main === module) {

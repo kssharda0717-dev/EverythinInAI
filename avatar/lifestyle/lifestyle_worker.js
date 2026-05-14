@@ -314,8 +314,32 @@ async function main() {
     const runId = `inspire-${Date.now()}`;
     const workDir = fs.mkdtempSync(path.join(os.tmpdir(), `inspire-${runId.slice(0, 14)}-`));
 
-    // Step 1: hero image — use Gemini's keyframe_prompt (already canonical-anchored).
-    const heroPrompt = analysis.keyframe_prompt;
+    // Step 1: hero image — splice canonical identity into Gemini's keyframe_prompt
+    // even though the analyzer prompt template already requires it. Belt and
+    // suspenders: Gemini sometimes drifts and a single drift would post a
+    // wrong-looking Rhea reel. We explicitly verify CANONICAL_LOOK + body
+    // anchor + complexion negations are present before sending to Flux.
+    let heroPrompt = analysis.keyframe_prompt || '';
+    if (!heroPrompt.includes('#A17B63')) {
+      // Skin-tone hex anchor missing — splice the full canonical look in.
+      heroPrompt = heroPrompt.replace(
+        /Indian content creator/i,
+        `Indian content creator. Identity: ${CANONICAL_LOOK}.`
+      );
+      // If the regex didn't fire (no "Indian content creator" phrase), prepend.
+      if (!heroPrompt.includes('#A17B63')) {
+        heroPrompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}. ${heroPrompt}`;
+      }
+    }
+    if (!heroPrompt.toLowerCase().includes('hourglass') && !heroPrompt.toLowerCase().includes('curves')) {
+      // Fuller body anchor missing — splice it in.
+      heroPrompt = heroPrompt.replace(
+        /Indian content creator[^.]*\./i,
+        (m) => `${m} Body: ${CURVY_BODY}.`
+      );
+    }
+    // Always reinforce complexion negations + lifestyle dignity at the end.
+    heroPrompt = `${heroPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
     log.info(`[1/4] Rendering inspire hero image (Flux+LoRA)...`);
     const heroSeed = Math.floor(Math.random() * 1_000_000);
     const heroResult = await runModel('flux_dev_lora', {
