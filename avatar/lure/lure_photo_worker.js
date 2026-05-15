@@ -280,44 +280,72 @@ function enforceFrameworkKeywords(prompt, angle) {
   return prompt + splice;
 }
 
+// Compact / front-loaded prompt builder. Flux Dev follows short prompts
+// (~150 words) far better than long ones. We extract the SCENE and OUTFIT
+// description from Gemini's draft, drop all the redundant bloat, and produce
+// a tight prompt with elements ordered by Flux-weight importance:
+//   1. Subject + identity (face/skin/hair) — highest weight
+//   2. Body type — second highest
+//   3. Specific garment color + construction — third
+//   4. Key prop in hand or scene anchor — fourth
+//   5. Framing — fifth
+//   6. Lighting + style — last
 function buildPromptFromConcept(concept, trigger) {
-  let prompt = concept.image_prompt || '';
-  // Ensure the LoRA trigger token is present
-  if (!prompt.includes(trigger) && !prompt.includes('AVI_TOK')) {
-    prompt = `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}. ${prompt}`;
-  } else if (!prompt.toLowerCase().includes('hourglass') && !prompt.toLowerCase().includes('curves')) {
-    prompt = prompt.replace(
-      /Indian content creator/i,
-      `Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}`
-    );
-  } else if (!prompt.includes('#A17B63')) {
-    // Curves were named but identity/skin tone was not — inject canonical look.
-    prompt = prompt.replace(
-      /Indian content creator[^.]*\./i,
-      (m) => `${m} Identity: ${CANONICAL_LOOK}.`
-    );
-  }
-  // Reinforce style if the LLM forgot
-  if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
-    prompt += ` ${STYLE_ANCHOR}`;
-  }
+  // Use Gemini's image_prompt as the scene blueprint, but distil it down.
+  const fullPrompt = concept.image_prompt || '';
 
-  // Lure-specific guardrails: enforce full-body framing + framework keywords.
-  prompt = enforceFraming(prompt);
+  // Try to extract the SCENE clause (everything after the canonical anchor and body anchor)
+  // The full prompt typically starts with identity/body anchors (which we'll re-inject
+  // ourselves with a tight version) followed by the scene-specific text.
+  let sceneText = fullPrompt;
+  const sceneMatch = fullPrompt.match(/never artificial\.\s*(.+)$/i);
+  if (sceneMatch) sceneText = sceneMatch[1];
+  // Strip embedded "Real DSLR ... NEVER dusky" identity blocks if present
+  sceneText = sceneText
+    .replace(/Real DSLR photograph of[^.]+\./gi, '')
+    .replace(/Long dark brown softly wavy[^.]+\./gi, '')
+    .replace(/Soft natural glam makeup[^.]+\./gi, '')
+    .replace(/Small gold hoop[^.]+\./gi, '')
+    .replace(/Visibly hourglass figure[^.]+\./gi, '')
+    .replace(/IMPORTANT:[^.]+\./gi, '')
+    .replace(/Composition is full-body[^.]+\./gi, '')
+    .replace(/Full-body shot showing[^.]+\./gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // TIGHT identity (50 words) — only the locked-down face/skin/hair anchors.
+  const tightIdentity = `Real DSLR photo of ${trigger} woman, 25-year-old Indian model, fair north-Indian wheatish skin (hex #A17B63, NEVER bronze NEVER tanned NEVER dusky), long loose dark-brown wavy hair, soft glam mauve-pink lip, gold hoops, oval face`;
+
+  // TIGHT body (25 words)
+  const tightBody = `hourglass figure with defined waist and fuller hips and bust like Disha Patani / Tara Sutaria, never stick-thin, never boyish`;
+
+  // FRAMING (15 words)
+  const tightFraming = `full-body shot from head to mid-shin, entire outfit visible, magazine-cover composition`;
+
+  // STYLE (20 words)
+  const tightStyle = `shot on iPhone 15 Pro Max, photorealistic skin with visible pores, raw 35mm-grain documentary aesthetic, NOT cgi NOT cartoon`;
+
+  // Build the final prompt: identity first, body second, scene third (Gemini's),
+  // framing fourth, style last. Total ~150 words.
+  let prompt = `${tightIdentity}. ${tightBody}. ${sceneText}. ${tightFraming}. ${tightStyle}.`;
+
+  // Ensure framework-required keywords are present (validator only — Gemini
+  // usually copies them from the framework prompt_template now, but if not we
+  // splice them in).
   prompt = enforceFrameworkKeywords(prompt, concept.angle);
 
-  // Tungsten guard: if the prompt mentions warm/tungsten/lamp light, append the
-  // explicit "face stays neutrally lit" instruction so skin tone doesn't drift.
-  if (/tungsten|warm lamp|brass lamp|warm tungsten|reading lamp|bedside lamp/i.test(prompt)) {
-    prompt += TUNGSTEN_GUARD;
+  // Tungsten guard — widened to catch "vanity bulb", "warm bulb", etc.
+  if (/tungsten|warm lamp|brass lamp|warm tungsten|reading lamp|bedside lamp|vanity bulb|vanity light|warm bulb|incandescent|warm cinematic/i.test(prompt)) {
+    prompt += ` Face is NEUTRALLY lit by soft cool fill light from off-camera so wheatish complexion stays #A17B63 — do NOT bronze the face with the warm ambient.`;
   }
 
-  // Always add complexion negations and dignity at the end — these are short
-  // and Flux weights end-of-prompt instructions strongly.
-  // NOTE: Removed the old "body shown is incidental" tail — on Friday lure the
-  // body IS the visual product (within taste). The dignity anchor still bans
-  // crude poses / cleavage spillage / lingerie-alone.
-  return `${OUTCOME_SPEC} ${prompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}.`;
+  // Final dignity register — EDITORIAL not modesty. Cleavage allowed if it
+  // reads like Vogue / Elle / Disha Patani magazine, not OnlyFans / thirst-trap.
+  // We removed the old "NEVER cleavage" hard ban because the user wants
+  // editorial-grade allure on Friday lure + weekend lifestyle.
+  const editorialRegister = `Vogue India / Elle India editorial register, Disha-Patani-magazine-cover energy, magnetic alluring desirable, cleavage and decolletage are fine if they read editorial, NOT OnlyFans NOT thirst-trap NOT crude NOT trashy NOT lingerie-only NOT bedroom-vulgar`;
+
+  return `${prompt} ${editorialRegister}.`;
 }
 
 async function renderLurePhoto({ persona, sceneKey, calendarId }) {
@@ -331,8 +359,8 @@ async function renderLurePhoto({ persona, sceneKey, calendarId }) {
     lora_scale: 1.0,
     aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
     num_outputs: 1,
-    num_inference_steps: 50,
-    guidance: 3.5,
+    num_inference_steps: 80,  // More steps = better complex-prop rendering (phone in hand, specific neckline)
+    guidance: 5.5,           // Higher guidance = Flux follows the prompt more strictly (less LoRA latent drift)
     output_format: 'webp',
     output_quality: 100,
     go_fast: false,
@@ -386,8 +414,8 @@ async function main() {
       lora_scale: 1.0,
       aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
       num_outputs: 1,
-      num_inference_steps: 50,
-      guidance: 3.5,
+      num_inference_steps: 80,  // More steps = better complex-prop rendering
+      guidance: 5.5,           // Higher guidance = Flux follows the prompt more strictly
       output_format: 'webp',
       output_quality: 100,
       go_fast: false,
