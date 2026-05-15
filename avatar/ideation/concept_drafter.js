@@ -150,12 +150,14 @@ ${frameworksList}
   } else if (streamType === 'lure') {
     taskBlock = `
 TASK: Draft 3 distinct Lure Photo concepts for Friday.
-══════════════════════════════════════════════════════════════
+═════════════════════════════════════════════════════════════
 
-REGISTER: Friday lure photos are MAGNETIC + ALLURING + DESIRABLE — the
-weekly hero post that drives non-subscriber discovery and follows.
+REGISTER: Friday lure photos are MAGNETIC + ALLURING + DESIRABLE + HOT — the
+weekly hero post that drives non-subscriber discovery and follows. Rhea must
+look gorgeous, magnetic, sexy in a tasteful Bollywood-actress register.
 Reference quality: Kiara Advani magazine cover, Tara Sutaria resort editorial,
-Sonam Kapoor Cannes shoot. Sensual but never explicit, alluring but never crude.
+Sonam Kapoor Cannes shoot, Disha Patani magazine spread. Sensual and visibly
+desirable but never crude or explicit.
 
 REQUIREMENTS:
 1. Choose 3 DIFFERENT frameworks from this active registry:
@@ -163,19 +165,38 @@ ${frameworksList}
 
 2. For each concept, return:
    - title: working title
-   - image_prompt: A HIGHLY DETAILED image generation prompt. MUST start with EXACTLY this prefix:
+   - image_prompt: A HIGHLY DETAILED image generation prompt with this EXACT structure:
+
+     [IDENTITY PREFIX] — always start with:
      "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator with fair north-Indian wheatish complexion (skin tone hex roughly #A17B63, NEVER tanned, NEVER bronze, NEVER dusky). Long dark brown softly wavy hair flowing loosely past her shoulders. Soft natural glam makeup with mauve-pink lips. Small gold hoop earrings."
-     Then add: scene + activity + a SPECIFIC named prop she is interacting with + outfit (with explicit neckline detail) + lighting (warm cinematic, NOT generic golden hour) + framing.
+
+     [BODY] — always include:
+     "Visibly hourglass figure with defined fuller hips and bust, body-positive proportions similar to a fit Bollywood actress like Disha Patani or Tara Sutaria, beautiful feminine silhouette, natural and aspirational, never exaggerated, never artificial."
+
+     [FRAMING] — MANDATORY: choose ONE of these and write it explicitly:
+     "3/4-length portrait framing showing her from mid-thigh up, full outfit visible" OR
+     "full-body shot showing her entire figure head-to-toe, full outfit visible, magazine-cover composition" OR
+     "hip-up editorial framing showing waist + hips + outfit clearly"
+     NEVER write "head-and-shoulders" or "close-up portrait" or "bust shot" — those are BANNED on Friday lure.
+
+     [SCENE EXECUTION] — You MUST faithfully copy 80%+ of the chosen framework's prompt_template DETAILS into your scene description. If the framework says "saree + diyas + jasmine", your image_prompt MUST contain the exact words "saree", "diya", and "jasmine". If it says "lehenga + palace courtyard", your image_prompt MUST contain "lehenga" and "palace courtyard". DO NOT substitute a generic cafe/bar scene for a Diwali home scene. The framework's prompt_template is your scene blueprint, not a suggestion.
+
+     [POSE/EXPRESSION] — Direct soft eye contact + warm magnetic closed smile + slight forward lean into the camera. Confident, alluring, knowing.
+
+     [LIGHTING] — Warm cinematic with a NAMED key light source (a named diya, a named lamp, a named window, a named string light) — never generic "golden hour".
+
    - caption: Instagram caption matching the vibe (max 150 chars, magnetic and slightly mysterious, NOT clickbait).
    - hashtags: array of 5-8 lifestyle/aesthetic hashtags.
    - angle: the slug of the framework used.
    - lure_level: ${lureLevel}.
 
-3. ELEGANCE & ALLURE GUARDRAILS (HARD):
-   - Direct soft eye contact with a warm closed smile is the PRIMARY pose default. Side-glance/cold-model pose is BANNED.
-   - The body is part of the lifestyle moment, not the entire subject.
-   - Hint of decolletage / shoulder / midriff (in saree) is allowed within scene context.
-   - BANNED: bralette alone, lingerie alone, "come hither" bedroom pose, exposed cleavage spillage, generic AI thirst-trap framing.
+3. ALLURE GUARDRAILS (HARD):
+   - SHOW THE BODY — the body silhouette and outfit IS the entire visual product on Friday lure. Tight curve-revealing fit, magazine-cover styling.
+   - Body MUST be hourglass-Bollywood-curvy, never stick-thin, never flat-chested, never boyish.
+   - Outfit MUST be visibly worn on the body — saree drape visible, lehenga skirt visible, dress hem visible. NOT a head-and-shoulders crop.
+   - Hint of decolletage / shoulder / midriff (in saree blouse) is encouraged within scene context.
+   - BANNED: bralette alone with no other clothing, lingerie alone, "come hither" bedroom pose with crotch in frame, exposed cleavage spillage out of an undersized bra, fully-nude implied poses.
+   - BANNED: head-and-shoulders only crop, bust shot only, close-up portrait only — those are TECH-REEL framings, NOT lure framings.
    - The setting must be a REAL physical place with named props (book, espresso cup, diya, lehenga dupatta, art canvas) — NOT generic AI bokeh.
    - Lighting must be cinematic and warm but NOT bronze her skin (key light stays neutral, warmth comes from a named lamp/window/diya).
 `;
@@ -187,7 +208,13 @@ ${frameworksList}
   } else if (streamType === 'lifestyle') {
     taskBlock = `
 TASK: Draft 3 distinct Lifestyle Action Video concepts for the weekend.
-═══════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════════
+
+REGISTER: Weekend lifestyle videos are ASPIRATIONAL + ACTIVE + DESIRABLE.
+Rhea is shown LIVING (gym, pilates, drive, swim, hike, dance) in a way that
+makes viewers want her body, her routine, and her life. Body-positive,
+hourglass, magnetic. Reference: Disha Patani fitness reels, Tara Sutaria
+dance content, Sara Ali Khan travel vlogs.
 
 REQUIREMENTS:
 1. Choose 3 DIFFERENT frameworks from this active registry:
@@ -195,13 +222,38 @@ ${frameworksList}
 
 2. For each concept, return:
    - title: working title
-   - keyframe_prompt: A highly detailed image prompt for the static starting frame. Must include "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator."
-   - motion_prompt: Instructions for the AI video generator on how to animate the keyframe (e.g., "smooth camera pan, hair blowing in wind, lifting kettlebell").
+   - keyframe_prompt: A highly detailed image prompt for the static starting frame with this EXACT structure:
+
+     [IDENTITY PREFIX] — always start with:
+     "Real DSLR photograph of AVI_TOK woman, a 25-year-old Indian content creator with fair north-Indian wheatish complexion (skin tone hex roughly #A17B63, NEVER tanned, NEVER bronze, NEVER dusky). Long dark brown softly wavy hair flowing loosely past her shoulders. Soft natural glam makeup with mauve-pink lips."
+
+     [BODY] — always include:
+     "Visibly hourglass figure with defined fuller hips and bust, body-positive proportions similar to a fit Bollywood actress like Disha Patani or Tara Sutaria, beautiful feminine silhouette, athletic and aspirational, never exaggerated, never artificial."
+
+     [FRAMING] — MANDATORY: write one of these explicitly:
+     "full-body shot showing her entire figure mid-action, dynamic composition" OR
+     "3/4-length action framing showing her from mid-thigh up, dynamic composition" OR
+     "wide environment shot showing her body in context with the scene"
+     NEVER write "head-and-shoulders" or "close-up" — those are BANNED on lifestyle.
+
+     [SCENE EXECUTION] — You MUST faithfully copy 80%+ of the chosen framework's prompt_template DETAILS into your scene description. If the framework says "luxury gym + kettlebell", you MUST include those words. The framework's prompt_template is your blueprint.
+
+     [POSE/EXPRESSION] — Mid-action, confident, magnetic. The activity itself drives the pose.
+
+     [LIGHTING] — Warm cinematic with a NAMED key light — never generic.
+
+   - motion_prompt: Instructions for the AI video generator on how to animate the keyframe (e.g., "smooth camera pan, hair blowing in wind, lifting kettlebell with controlled form, slight slow-motion"). Body must remain hourglass throughout.
    - music_mood: 'upbeat', 'calm', or 'energetic'.
    - caption: Instagram caption.
    - hashtags: array of 5-8 lifestyle hashtags.
    - angle: the slug of the framework used.
    - lure_level: ${lureLevel}.
+
+3. ALLURE GUARDRAILS (HARD):
+   - SHOW THE BODY — the body silhouette + activity is the entire visual product. Body must be hourglass-Bollywood-curvy.
+   - Outfit must be activity-appropriate but body-revealing in proportion (gym set fits, swimwear fits, hike gear fits).
+   - BANNED: head-and-shoulders only, bust shot only, generic AI close-up portrait.
+   - BANNED: nudity, lingerie, exposed cleavage spillage, "come hither" bedroom poses.
 `;
     outputSchema = `{
   "concepts": [

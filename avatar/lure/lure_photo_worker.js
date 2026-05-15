@@ -207,7 +207,7 @@ function buildPrompt(sceneKey, persona, trigger) {
     // shape) anchors the LoRA before any scene-specific words can pull it off.
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
     // Dignity guardrail — lure variant: tasteful, never vulgar, never thirst-trap.
-    `${SHARED_DIGNITY_ANCHOR}, tastefully feminine, body shown is incidental to the lifestyle moment.`,
+    `${SHARED_DIGNITY_ANCHOR}, full-body or 3/4-length composition, body silhouette and outfit visible, magazine-cover styling.`,
     scene.scene + '.',
     `Wearing: ${scene.outfit}.`,
     // Extra complexion protection because lure scenes often involve golden
@@ -221,6 +221,51 @@ function buildPrompt(sceneKey, persona, trigger) {
  * NEW: Build a prompt directly from the LLM-generated image_prompt on the concept.
  * This is used when the lure photo is part of an LLM-drafted concept (post-Phase 16).
  */
+// Framework-keyword validators — if the angle implies certain props/garments,
+// we MUST see them in the prompt; otherwise Gemini took a shortcut and we splice
+// the missing keywords in manually so the framework actually executes.
+const FRAMEWORK_KEYWORDS = {
+  diwali_saree_glow:        ['saree', 'diya'],
+  balcony_kurta_sunset:     ['kurta', 'balcony'],
+  udaipur_palace_lehenga:   ['lehenga', 'palace'],
+  library_silk_blouse:      ['library', 'silk blouse'],
+  hotel_robe_morning:       ['robe', 'hotel suite'],
+  art_gallery_blazer_lure:  ['gallery', 'blazer', 'suit'],
+  mirror_selfie_classy:     ['mirror'],
+  cafe_candid:              ['cafe'],
+  golden_hour_balcony:      ['balcony', 'skyline'],
+  dressed_up_elevator:      ['elevator', 'dress'],
+  morning_kitchen:          ['kitchen', 'matcha'],
+  vacation_stroll:          ['street', 'cobblestone'],
+};
+
+function enforceFraming(prompt) {
+  // BANNED head-and-shoulders / bust shot phrasing — strip it out if Gemini snuck it in.
+  let p = prompt
+    .replace(/head[- ]and[- ]shoulders/gi, '3/4-length')
+    .replace(/close[- ]up portrait/gi, '3/4-length portrait')
+    .replace(/bust shot/gi, '3/4-length shot');
+
+  // If Gemini didn't include any framing instruction, append the default lure framing.
+  const hasFraming = /full[- ]body|3\/4[- ]length|hip[- ]up|waist[- ]up|wide environment/i.test(p);
+  if (!hasFraming) {
+    p += ' 3/4-length portrait framing showing her from mid-thigh up, full outfit visible, magazine-cover composition.';
+  }
+  return p;
+}
+
+function enforceFrameworkKeywords(prompt, angle) {
+  const required = FRAMEWORK_KEYWORDS[angle];
+  if (!required) return prompt;
+  const lower = prompt.toLowerCase();
+  const missing = required.filter(kw => !lower.includes(kw.toLowerCase()));
+  if (missing.length === 0) return prompt;
+  log.warn(`Gemini's image_prompt for ${angle} is missing required keywords: [${missing.join(', ')}]. Splicing them in.`);
+  // Append a forceful clause at the end — Flux weights end-of-prompt strongly.
+  const splice = ` Scene MUST visibly include: ${missing.join(', ')}, prominently featured.`;
+  return prompt + splice;
+}
+
 function buildPromptFromConcept(concept, trigger) {
   let prompt = concept.image_prompt || '';
   // Ensure the LoRA trigger token is present
@@ -242,9 +287,17 @@ function buildPromptFromConcept(concept, trigger) {
   if (!prompt.toLowerCase().includes('iphone') && !prompt.toLowerCase().includes('photographic style')) {
     prompt += ` ${STYLE_ANCHOR}`;
   }
+
+  // Lure-specific guardrails: enforce full-body framing + framework keywords.
+  prompt = enforceFraming(prompt);
+  prompt = enforceFrameworkKeywords(prompt, concept.angle);
+
   // Always add complexion negations and dignity at the end — these are short
   // and Flux weights end-of-prompt instructions strongly.
-  return `${OUTCOME_SPEC} ${prompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
+  // NOTE: Removed the old "body shown is incidental" tail — on Friday lure the
+  // body IS the visual product (within taste). The dignity anchor still bans
+  // crude poses / cleavage spillage / lingerie-alone.
+  return `${OUTCOME_SPEC} ${prompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}.`;
 }
 
 async function renderLurePhoto({ persona, sceneKey, calendarId }) {

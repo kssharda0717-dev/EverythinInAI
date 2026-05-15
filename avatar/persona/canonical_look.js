@@ -90,7 +90,7 @@ const DIGNITY_ANCHOR =
 //     close-up with no context, soft-porn pose)
 // ============================================================================
 const LURE_DIGNITY_ANCHOR =
-  'magnetic alluring desirable beautifully feminine energy (Kiara Advani / Tara Sutaria / Sonam Kapoor magazine-cover register), sensual but never explicit, hint of skin allowed within the scene context (decolletage, shoulder, midriff in saree, swimsuit at a pool, silk slip in a luxury hotel suite), the body is part of the lifestyle moment not the entire subject, IIT-Mumbai-grad-meets-magazine-cover quality, NEVER bralette or lingerie alone, NEVER explicit, NEVER "come hither" pornographic pose, NEVER crude, NEVER vulgar, NEVER generic AI thirst-trap, NEVER over-glossed plastic skin';
+  'magnetic alluring desirable HOT beautifully feminine energy (Kiara Advani / Tara Sutaria / Sonam Kapoor / Disha Patani magazine-cover register), Bollywood-actress-tier desirability, sensual and visibly desirable but never crude or explicit, hourglass figure with defined waist and curves clearly visible through her outfit, hint of skin within scene context (decolletage, bare shoulder, midriff in saree, swimsuit at a pool, silk slip in a luxury hotel suite), the body silhouette and outfit ARE the visual product alongside the scene, IIT-Mumbai-grad-meets-Vogue-India-cover quality, NEVER bralette or lingerie alone, NEVER full nudity, NEVER "come hither" pornographic pose, NEVER crotch-in-frame, NEVER cleavage spillage out of an undersized bra, NEVER crude, NEVER vulgar, NEVER over-glossed plastic skin';
 
 // ============================================================================
 // LIFESTYLE_DIGNITY_ANCHOR (Sat-Sun lifestyle videos — athletic / dynamic)
@@ -100,7 +100,7 @@ const LURE_DIGNITY_ANCHOR =
 // activity, not the body.
 // ============================================================================
 const LIFESTYLE_DIGNITY_ANCHOR =
-  'athletic confident magnetic energy, body-positive but the focus is on the ACTIVITY (gym, pilates, hiking, dancing, swimming, driving) not on the body, the body is incidental to the action, joyful and aspirational, NEVER posing for the camera, NEVER thirst-trap, NEVER crude';
+  'athletic confident magnetic desirable energy, body-positive Bollywood-actress hourglass figure with defined waist and curves clearly visible through activity wear, the body silhouette and outfit are part of the visual product alongside the activity (gym, pilates, hiking, dancing, swimming, driving), Disha-Patani-fitness-reel / Tara-Sutaria-dance-content register, magazine-cover composition, joyful aspirational dynamic, confident eye contact OR fully absorbed in action, NEVER lingerie-alone, NEVER crude, NEVER thirst-trap, NEVER crotch-in-frame, NEVER cleavage spillage';
 
 // ============================================================================
 // LIGHTING_NEUTRAL_DAYLIGHT

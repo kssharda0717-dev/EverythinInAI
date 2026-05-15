@@ -208,7 +208,7 @@ function buildHeroPrompt(mood, trigger) {
     const llmPrompt = mood.keyframe_prompt + (mood.outfit ? ` Wearing: ${mood.outfit}.` : '');
     return [
       `Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
-      `${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`,
+      `${SHARED_DIGNITY_ANCHOR}, full-body or 3/4-length composition, body silhouette and outfit visible, magazine-cover styling.`,
       llmPrompt,
       COMPLEXION_NEGATIONS,
       LIFESTYLE_PHOTO_STYLE,
@@ -217,7 +217,7 @@ function buildHeroPrompt(mood, trigger) {
   return [
     // Identity anchored FIRST so Flux locks skin/hair/eyes before scene words can drift it.
     `Real DSLR photograph of ${trigger} woman, a 25-year-old Indian content creator. Identity: ${CANONICAL_LOOK}. Body: ${CURVY_BODY}.`,
-    `${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`,
+    `${SHARED_DIGNITY_ANCHOR}, full-body or 3/4-length composition, body silhouette and outfit visible, magazine-cover styling.`,
     mood.keyframe_prompt + '.',
     mood.outfit ? `Wearing: ${mood.outfit}.` : '',
     COMPLEXION_NEGATIONS,
@@ -339,7 +339,7 @@ async function main() {
       );
     }
     // Always reinforce complexion negations + lifestyle dignity at the end.
-    heroPrompt = `${heroPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
+    heroPrompt = `${heroPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, full-body or 3/4-length composition, body silhouette and outfit visible, magazine-cover styling.`;
     log.info(`[1/4] Rendering inspire hero image (Flux+LoRA)...`);
     const heroSeed = Math.floor(Math.random() * 1_000_000);
     const heroResult = await runModel('flux_dev_lora', {
@@ -524,7 +524,7 @@ async function main() {
     }
     // Always append complexion negations and dignity at the end — Flux weights
     // late prompt instructions strongly.
-    kfPrompt = `${kfPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, body shown is incidental to the lifestyle moment.`;
+    kfPrompt = `${kfPrompt} ${COMPLEXION_NEGATIONS} ${SHARED_DIGNITY_ANCHOR}, full-body or 3/4-length composition, body silhouette and outfit visible, magazine-cover styling.`;
     mood = {
       label: concept.title || 'LLM Lifestyle Concept',
       keyframe_prompt: kfPrompt,
