@@ -26,24 +26,50 @@ function formatConceptsMessage(signal, concepts, conceptIds) {
   const lines = [];
   lines.push(`🎬 IDEATION — ${new Date().toISOString().slice(0, 10)}`);
   lines.push('');
-  lines.push(`📡 SIGNAL: ${truncate(signal.title, 80)}`);
-  lines.push(`   ${signal.type.toUpperCase()} · virality ${signal.virality_score}/10 · ${signal.source}`);
-  lines.push(`   ${signal.url}`);
+
+  // Stream-aware signal header. Lure / lifestyle don't have a real signal source
+  // (they're synthetic briefs), so we hide the noisy `undefined source / empty url` rows.
+  const streamType = (signal.type || '').toLowerCase();
+  const hasRealSource = streamType === 'tech' && signal.source && signal.url;
+  if (hasRealSource) {
+    lines.push(`📡 SIGNAL: ${truncate(signal.title, 80)}`);
+    lines.push(`   ${signal.type.toUpperCase()} · virality ${signal.virality_score}/10 · ${signal.source}`);
+    lines.push(`   ${signal.url}`);
+  } else {
+    lines.push(`🎨 ${streamType === 'lure' ? 'FRIDAY LURE' : streamType === 'lifestyle' ? 'WEEKEND LIFESTYLE' : 'TECH'} BRIEF`);
+    lines.push(`   ${truncate(signal.title || 'Daily content brief', 80)}`);
+  }
   lines.push('');
 
   concepts.forEach((c, i) => {
     const letter = String.fromCharCode(65 + i); // A, B, C
-    lines.push(`▶ Concept ${letter} — ${c.angle?.toUpperCase() || 'IDEA'} · lure ${c.lure_level}/4`);
-    lines.push(`  Hook: ${truncate(c.hook, 90)}`);
-    lines.push(`  Body: ${truncate(c.body_script, 200)}`);
-    lines.push(`  Punch: ${truncate(c.punchline, 90)}`);
-    lines.push(`  Caption: ${truncate(c.caption, 120)}`);
+    lines.push(`▶ Concept ${letter} — ${c.angle?.toUpperCase() || 'IDEA'} · lure ${c.lure_level || '?'}/4`);
+
+    // Stream-aware body. Tech reels have hook/body/punch; lure has image_prompt;
+    // lifestyle has keyframe_prompt + motion_prompt + music_mood. Showing fields
+    // a stream doesn't populate just produces empty lines that confuse the user.
+    if (c.hook || c.body_script || c.punchline) {
+      // Tech reel
+      if (c.hook) lines.push(`  Hook: ${truncate(c.hook, 90)}`);
+      if (c.body_script) lines.push(`  Body: ${truncate(c.body_script, 200)}`);
+      if (c.punchline) lines.push(`  Punch: ${truncate(c.punchline, 90)}`);
+    } else if (c.keyframe_prompt || c.motion_prompt) {
+      // Lifestyle reel
+      if (c.keyframe_prompt) lines.push(`  Scene: ${truncate(c.keyframe_prompt, 200)}`);
+      if (c.motion_prompt) lines.push(`  Motion: ${truncate(c.motion_prompt, 120)}`);
+      if (c.music_mood) lines.push(`  Mood: ${c.music_mood}`);
+    } else if (c.image_prompt) {
+      // Lure photo
+      lines.push(`  Scene: ${truncate(c.image_prompt, 220)}`);
+    }
+
+    if (c.caption) lines.push(`  Caption: ${truncate(c.caption, 120)}`);
     lines.push(`  Pick: /pick_${conceptIds[i].slice(0, 8)}`);
     lines.push('');
   });
 
   lines.push('⚠️ You MUST reply /pick_<id> for one to render.');
-  lines.push('NO auto-pick — if you don\'t reply, today\'s tech reel does NOT get rendered (cost-control).');
+  lines.push('NO auto-pick — if you don\'t reply, today\'s render will not happen (cost-control).');
   return lines.join('\n');
 }
 

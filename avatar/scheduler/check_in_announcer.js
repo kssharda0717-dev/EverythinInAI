@@ -30,9 +30,13 @@ if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) {
 
 const API = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
 
-// Tolerance window: a reel posted 46-50 hours ago is "due" for check-in
-const CHECKIN_AGE_MIN_HOURS = 46;
-const CHECKIN_AGE_MAX_HOURS = 50;
+// Tolerance window: a reel posted 47-49 hours ago is "due" for check-in.
+// We narrowed the band from 46-50 → 47-49 because the user observed the
+// alert firing as early as 46h, which felt premature. With dedup via
+// check_in_alerted_at, a 2-hour window is plenty: even if the cron stops
+// for an hour, the next run still catches the row before 49h elapse.
+const CHECKIN_AGE_MIN_HOURS = 47;
+const CHECKIN_AGE_MAX_HOURS = 49;
 
 async function sendMessage(text) {
   try {
@@ -110,8 +114,10 @@ async function main() {
     const friendly = c.title.length > 40 ? c.title.slice(0, 40) + '…' : c.title;
     const hoursOld = Math.round((now - new Date(row.posted_at).getTime()) / 3600_000);
 
-    const msg =
-      `\u23F0 *48h Check-in*\n\n` +
+    // Title says "~{hours}h Check-in" reflecting the actual elapsed time so the
+      // user is never confused if it fires at 47h or 49h instead of exactly 48h.
+      const msg =
+      `\u23F0 *${hoursOld}h Check-in*\n\n` +
       `Reel posted ~${hoursOld}h ago:\n*${friendly}*\n` +
       `Framework: \`${c.angle || 'unknown'}\`\n\n` +
       `Open Instagram \u2192 reel \u2192 *View Insights*. Copy the numbers, then send:\n\n` +
