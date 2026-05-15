@@ -240,19 +240,33 @@ const FRAMEWORK_KEYWORDS = {
 };
 
 function enforceFraming(prompt) {
-  // BANNED head-and-shoulders / bust shot phrasing — strip it out if Gemini snuck it in.
+  // BANNED phrasings that produce chest-up crops — strip and replace with full-body.
   let p = prompt
-    .replace(/head[- ]and[- ]shoulders/gi, '3/4-length')
-    .replace(/close[- ]up portrait/gi, '3/4-length portrait')
-    .replace(/bust shot/gi, '3/4-length shot');
+    .replace(/head[- ]and[- ]shoulders/gi, 'full-body')
+    .replace(/close[- ]up portrait/gi, 'full-body portrait')
+    .replace(/bust shot/gi, 'full-body shot')
+    .replace(/3\/4[- ]length/gi, 'full-body')   // upgrade 3/4-length → full-body for lure
+    .replace(/hip[- ]up/gi, 'full-body')
+    .replace(/waist[- ]up/gi, 'full-body');
 
-  // If Gemini didn't include any framing instruction, append the default lure framing.
-  const hasFraming = /full[- ]body|3\/4[- ]length|hip[- ]up|waist[- ]up|wide environment/i.test(p);
-  if (!hasFraming) {
-    p += ' 3/4-length portrait framing showing her from mid-thigh up, full outfit visible, magazine-cover composition.';
+  // If Gemini didn't include any framing instruction, prepend the default FULL-BODY framing.
+  // The phrase appears at the END (Flux weights end-of-prompt strongly) AND in the middle
+  // for redundancy in case the prompt is long enough that early framing gets diluted.
+  const hasFullBody = /full[- ]body/i.test(p);
+  if (!hasFullBody) {
+    p += ' Full-body shot showing her entire figure from head to mid-shin, the entire outfit clearly visible, magazine-cover composition, NOT a chest-up crop, NOT a head-and-shoulders crop.';
+  } else {
+    // Already mentions full-body but reinforce at the very end so Flux doesn't drift.
+    p += ' Composition is full-body magazine-cover from head to mid-shin, entire outfit visible.';
   }
   return p;
 }
+
+// Tungsten/warm-lamp scenes (library, hotel suite, balcony at sunset) tend to
+// drift skin darker because Flux interprets warm key light as bronze-her-skin.
+// We append a hard counter-instruction whenever the prompt mentions warm light
+// sources, telling Flux to keep the FACE specifically lit by neutral fill.
+const TUNGSTEN_GUARD = ' IMPORTANT: even though the scene has warm lamp/tungsten/golden ambient light, her FACE itself must be lit by a NEUTRAL soft fill light so her wheatish complexion stays visible at hex #A17B63, the face is NOT bronzed by the warm ambient.';
 
 function enforceFrameworkKeywords(prompt, angle) {
   const required = FRAMEWORK_KEYWORDS[angle];
@@ -292,6 +306,12 @@ function buildPromptFromConcept(concept, trigger) {
   prompt = enforceFraming(prompt);
   prompt = enforceFrameworkKeywords(prompt, concept.angle);
 
+  // Tungsten guard: if the prompt mentions warm/tungsten/lamp light, append the
+  // explicit "face stays neutrally lit" instruction so skin tone doesn't drift.
+  if (/tungsten|warm lamp|brass lamp|warm tungsten|reading lamp|bedside lamp/i.test(prompt)) {
+    prompt += TUNGSTEN_GUARD;
+  }
+
   // Always add complexion negations and dignity at the end — these are short
   // and Flux weights end-of-prompt instructions strongly.
   // NOTE: Removed the old "body shown is incidental" tail — on Friday lure the
@@ -309,7 +329,7 @@ async function renderLurePhoto({ persona, sceneKey, calendarId }) {
     prompt,
     lora_weights: persona.active_lora_url,
     lora_scale: 1.0,
-    aspect_ratio: '4:5',
+    aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
     num_outputs: 1,
     num_inference_steps: 50,
     guidance: 3.5,
@@ -364,7 +384,7 @@ async function main() {
       prompt,
       lora_weights: persona.active_lora_url,
       lora_scale: 1.0,
-      aspect_ratio: '4:5',
+      aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
       num_outputs: 1,
       num_inference_steps: 50,
       guidance: 3.5,

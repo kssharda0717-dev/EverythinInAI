@@ -45,7 +45,7 @@ async function sendCompletionMessage({ contentType, targetDate, url, caption, ha
   const headerLines = [
     `${emoji} *${label} READY*  —  ${targetDate}`,
     ``,
-    `📥 Download: ${url}`,
+    `📥 Download (tap to copy): \`${url}\``,
     `💵 Cost: $${costUsd.toFixed(3)}`,
     ``,
     `Steps to post:`,
