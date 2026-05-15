@@ -359,8 +359,8 @@ async function renderLurePhoto({ persona, sceneKey, calendarId }) {
     lora_scale: 1.0,
     aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
     num_outputs: 1,
-    num_inference_steps: 80,  // More steps = better complex-prop rendering (phone in hand, specific neckline)
-    guidance: 5.5,           // Higher guidance = Flux follows the prompt more strictly (less LoRA latent drift)
+    num_inference_steps: 50,  // Replicate hard cap at 50 for flux_dev_lora
+    guidance: 6.0,           // Higher guidance = Flux follows the prompt more strictly (less LoRA latent drift)
     output_format: 'webp',
     output_quality: 100,
     go_fast: false,
@@ -414,8 +414,8 @@ async function main() {
       lora_scale: 1.0,
       aspect_ratio: '9:16',  // True portrait so full-body composition fits without cropping at hips
       num_outputs: 1,
-      num_inference_steps: 80,  // More steps = better complex-prop rendering
-      guidance: 5.5,           // Higher guidance = Flux follows the prompt more strictly
+      num_inference_steps: 50,  // Replicate hard cap at 50 for flux_dev_lora
+      guidance: 6.0,           // Higher guidance = Flux follows the prompt more strictly
       output_format: 'webp',
       output_quality: 100,
       go_fast: false,
